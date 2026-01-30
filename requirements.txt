@@ -3,13 +3,6 @@ flask==2.3.3
 flask-cors==4.0.0
 gunicorn==21.2.0
 
-# Database
-flask-sqlalchemy==3.0.5
-
-# Authentication
-flask-login==0.6.3
-authlib==1.2.1
-
 # Basic audio processing (minimal dependencies)
 soundfile==0.12.1
 
@@ -22,6 +15,3 @@ python-multipart==0.0.6
 
 # Development
 python-dotenv==1.0.0
-
-# Date handling
-python-dateutil==2.8.2
