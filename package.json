@@ -1,0 +1,32 @@
+{
+  "name": "voiceclean-ai",
+  "version": "1.0.0",
+  "description": "Professional audio enhancement tool using AI - remove background noise and enhance voice quality",
+  "main": "app.py",
+  "scripts": {
+    "dev": "python app.py",
+    "start": "gunicorn --bind 0.0.0.0:$PORT app:app",
+    "build": "echo 'No build step required for Python Flask app'"
+  },
+  "keywords": [
+    "audio",
+    "enhancement",
+    "noise-removal",
+    "voice",
+    "ai",
+    "machine-learning",
+    "huggingface",
+    "flask",
+    "python"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/voiceclean-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/voiceclean-ai/issues"
+  },
+  "homepage": "https://github.com/yourusername/voiceclean-ai#readme"
+}

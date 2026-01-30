@@ -1,0 +1,32 @@
+# Core dependencies
+flask==2.3.3
+flask-cors==4.0.0
+gunicorn==21.2.0
+
+# Database
+flask-sqlalchemy==3.0.5
+flask-migrate==4.0.5
+
+# Authentication
+flask-login==0.6.3
+authlib==1.2.1
+
+# Audio processing
+librosa==0.10.1
+soundfile==0.12.1
+numpy==1.24.3
+scipy==1.11.3
+noisereduce==3.0.0
+
+# Web and API
+requests==2.31.0
+werkzeug==2.3.7
+
+# File handling
+python-multipart==0.0.6
+
+# Development
+python-dotenv==1.0.0
+
+# Date handling
+python-dateutil==2.8.2
