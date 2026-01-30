@@ -1,17 +1,10 @@
 # Core dependencies
 flask==2.3.3
 flask-cors==4.0.0
-gunicorn==21.2.0
-
-# Basic audio processing (minimal dependencies)
-soundfile==0.12.1
 
 # Web and API
 requests==2.31.0
 werkzeug==2.3.7
-
-# File handling
-python-multipart==0.0.6
 
 # Development
 python-dotenv==1.0.0
