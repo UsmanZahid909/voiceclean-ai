@@ -47,12 +47,18 @@
                 </div>
                 
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div class="flex items-center">
-                        <i class="fas fa-info-circle text-blue-500 mr-3"></i>
-                        <div>
-                            <h3 class="text-blue-800 font-medium">AI Enhancement Ready</h3>
-                            <p class="text-blue-600 text-sm">Upload your audio files for professional AI-powered enhancement.</p>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="fas fa-info-circle text-blue-500 mr-3"></i>
+                            <div>
+                                <h3 class="text-blue-800 font-medium">AI Enhancement Ready</h3>
+                                <p class="text-blue-600 text-sm">Upload your audio files for professional AI-powered enhancement.</p>
+                            </div>
                         </div>
+                        <button id="testApiBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-flask mr-1"></i>
+                            Test API
+                        </button>
                     </div>
                 </div>
             </div>
@@ -174,11 +180,13 @@
                 const processBtn = document.getElementById('processBtn');
                 const downloadBtn = document.getElementById('downloadBtn');
                 const processAnotherBtn = document.getElementById('processAnotherBtn');
+                const testApiBtn = document.getElementById('testApiBtn');
 
                 fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
                 processBtn.addEventListener('click', () => this.processAudio());
                 downloadBtn.addEventListener('click', () => this.downloadAudio());
                 processAnotherBtn.addEventListener('click', () => this.resetInterface());
+                testApiBtn.addEventListener('click', () => this.testApi());
             }
 
             handleFileSelect(event) {
@@ -226,21 +234,40 @@
                 try {
                     this.animateProgress();
 
+                    console.log('Sending audio file:', this.audioFile.name, 'Size:', this.audioFile.size);
+
                     const response = await fetch('/api/enhance', {
                         method: 'POST',
                         body: formData
                     });
 
+                    console.log('Response status:', response.status);
+
                     if (!response.ok) {
-                        throw new Error('Enhancement failed');
+                        // Try to get error message from response
+                        let errorMessage = 'Enhancement failed';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                        } catch (e) {
+                            errorMessage = `Server error (${response.status})`;
+                        }
+                        throw new Error(errorMessage);
                     }
 
                     const blob = await response.blob();
+                    console.log('Enhanced audio blob size:', blob.size);
+                    
+                    if (blob.size === 0) {
+                        throw new Error('Received empty audio file');
+                    }
+                    
                     this.enhancedAudioUrl = URL.createObjectURL(blob);
                     this.showResult();
                     
                 } catch (error) {
-                    alert('Error: ' + error.message);
+                    console.error('Enhancement error:', error);
+                    alert('Enhancement Error: ' + error.message + '\n\nPlease try:\n1. A smaller audio file\n2. A different audio format\n3. Check your internet connection');
                     this.hideProgress();
                 }
             }
@@ -320,6 +347,18 @@
                 if (this.enhancedAudioUrl) {
                     URL.revokeObjectURL(this.enhancedAudioUrl);
                     this.enhancedAudioUrl = null;
+                }
+            }
+
+            async testApi() {
+                try {
+                    console.log('Testing API...');
+                    const response = await fetch('/api/health');
+                    const data = await response.json();
+                    
+                    alert(`API Test Results:\n\nStatus: ${data.status}\nAI Enhancement: ${data.ai_enhancement}\nSupported Formats: ${data.supported_formats.join(', ')}\nAvailable APIs: ${data.available_apis}\nMax File Size: ${data.max_file_size}\nVersion: ${data.version}`);
+                } catch (error) {
+                    alert('API Test Failed: ' + error.message);
                 }
             }
 
