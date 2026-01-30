@@ -18,15 +18,12 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 # Constants
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac'}
 
-# Hugging Face API configuration
+# Resemble Enhance API configuration
+RESEMBLE_API_URL = "https://api-inference.huggingface.co/models/ResembleAI/resemble-enhance"
 HF_API_TOKEN = os.getenv('HF_API_TOKEN', 'hf_your_token_here')
-HF_API_URL = "https://api-inference.huggingface.co/models/speechbrain/sepformer-wham-enhancement"
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def enhance_audio_with_ai(input_path, output_path, enhancement_type='both'):
-    """Real AI audio enhancement using Hugging Face API"""
+def enhance_audio_with_resemble_ai(input_path, output_path, enhancement_type='both'):
+    """Real AI audio enhancement using Resemble Enhance API"""
     try:
         # Read the audio file
         with open(input_path, 'rb') as f:
@@ -38,27 +35,68 @@ def enhance_audio_with_ai(input_path, output_path, enhancement_type='both'):
             "Content-Type": "audio/wav"
         }
         
-        logger.info(f"Sending audio to Hugging Face API for enhancement...")
+        logger.info(f"Sending audio to Resemble Enhance AI for processing...")
         
-        # Send to Hugging Face API
-        response = requests.post(HF_API_URL, headers=headers, data=audio_data)
+        # Send to Resemble Enhance API
+        response = requests.post(RESEMBLE_API_URL, headers=headers, data=audio_data)
         
         if response.status_code == 200:
             # Save enhanced audio
             with open(output_path, 'wb') as f:
                 f.write(response.content)
-            logger.info(f"Audio enhanced successfully using AI")
+            logger.info(f"Audio enhanced successfully using Resemble AI")
+            return True
+        elif response.status_code == 503:
+            logger.info("Resemble AI model is loading, trying alternative...")
+            return enhance_audio_with_speechbrain(input_path, output_path, enhancement_type)
+        else:
+            logger.error(f"Resemble AI API error: {response.status_code} - {response.text}")
+            return enhance_audio_with_speechbrain(input_path, output_path, enhancement_type)
+            
+    except Exception as e:
+        logger.error(f"Resemble AI enhancement error: {e}")
+        return enhance_audio_with_speechbrain(input_path, output_path, enhancement_type)
+
+def enhance_audio_with_speechbrain(input_path, output_path, enhancement_type='both'):
+    """Fallback: SpeechBrain audio enhancement"""
+    try:
+        # Read the audio file
+        with open(input_path, 'rb') as f:
+            audio_data = f.read()
+        
+        # SpeechBrain API URLs based on enhancement type
+        api_urls = {
+            'both': "https://api-inference.huggingface.co/models/speechbrain/sepformer-wham-enhancement",
+            'noise': "https://api-inference.huggingface.co/models/speechbrain/sepformer-wham-enhancement", 
+            'voice': "https://api-inference.huggingface.co/models/speechbrain/sepformer_rescuespeech"
+        }
+        
+        api_url = api_urls.get(enhancement_type, api_urls['both'])
+        
+        headers = {
+            "Authorization": f"Bearer {HF_API_TOKEN}",
+            "Content-Type": "audio/wav"
+        }
+        
+        logger.info(f"Using SpeechBrain fallback for {enhancement_type} enhancement...")
+        
+        response = requests.post(api_url, headers=headers, data=audio_data)
+        
+        if response.status_code == 200:
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+            logger.info(f"Audio enhanced successfully using SpeechBrain")
             return True
         else:
-            logger.error(f"Hugging Face API error: {response.status_code} - {response.text}")
-            # Fallback to basic processing
+            logger.error(f"SpeechBrain API error: {response.status_code}")
             return enhance_audio_basic(input_path, output_path, enhancement_type)
             
     except Exception as e:
-        logger.error(f"AI enhancement error: {e}")
-        # Fallback to basic processing
+        logger.error(f"SpeechBrain enhancement error: {e}")
         return enhance_audio_basic(input_path, output_path, enhancement_type)
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 def enhance_audio_basic(input_path, output_path, enhancement_type='both'):
     """Fallback basic audio processing"""
     try:
@@ -123,8 +161,8 @@ def enhance_audio():
             
             logger.info(f"Processing audio file: {file.filename} with type: {enhancement_type}")
             
-            # Try AI enhancement first
-            success = enhance_audio_with_ai(temp_input.name, temp_output.name, enhancement_type)
+            # Try Resemble AI enhancement first
+            success = enhance_audio_with_resemble_ai(temp_input.name, temp_output.name, enhancement_type)
             temp_output.close()
             
             if success:
@@ -154,7 +192,8 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'ai_enhancement': 'enabled' if HF_API_TOKEN != 'hf_your_token_here' else 'demo_mode',
+        'ai_enhancement': 'resemble_ai_enabled' if HF_API_TOKEN != 'hf_your_token_here' else 'demo_mode',
+        'models': ['ResembleAI/resemble-enhance', 'SpeechBrain/sepformer'],
         'supported_formats': list(ALLOWED_EXTENSIONS)
     })
 
