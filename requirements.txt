@@ -10,10 +10,8 @@ flask-sqlalchemy==3.0.5
 flask-login==0.6.3
 authlib==1.2.1
 
-# Basic audio processing (Vercel-compatible)
+# Basic audio processing (minimal dependencies)
 soundfile==0.12.1
-numpy==1.24.3
-scipy==1.11.3
 
 # Web and API
 requests==2.31.0

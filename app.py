@@ -6,8 +6,7 @@ from authlib.integrations.flask_client import OAuth
 import os
 import tempfile
 import soundfile as sf
-import numpy as np
-from scipy import signal
+import math
 import logging
 from werkzeug.utils import secure_filename
 import time
@@ -98,7 +97,7 @@ def create_demo_user():
 
 def enhance_audio_basic(audio_path, output_path, enhancement_type='both'):
     """
-    Basic audio enhancement using scipy (Vercel-compatible)
+    Ultra-lightweight audio enhancement using only Python built-ins and soundfile
     """
     try:
         # Load audio file
@@ -109,61 +108,72 @@ def enhance_audio_basic(audio_path, output_path, enhancement_type='both'):
             raise ValueError("Empty audio file")
         
         # Convert to mono if stereo
-        if len(data.shape) > 1:
-            data = np.mean(data, axis=1)
+        if hasattr(data[0], '__len__'):  # Check if stereo
+            # Convert stereo to mono by averaging channels
+            mono_data = []
+            for sample in data:
+                if hasattr(sample, '__len__'):
+                    mono_data.append(sum(sample) / len(sample))
+                else:
+                    mono_data.append(sample)
+            data = mono_data
         
-        # 1. Basic noise reduction
+        # Convert to list for processing
+        if not isinstance(data, list):
+            data = data.tolist()
+        
+        # 1. Basic noise reduction - simple high-pass filter
         if enhancement_type in ['noise', 'both']:
-            # High-pass filter to remove low-frequency noise
-            nyquist = sr / 2
-            low_cutoff = 80 / nyquist
-            b, a = signal.butter(4, low_cutoff, btype='high')
-            data = signal.filtfilt(b, a, data)
+            # Simple high-pass filter using difference equation
+            filtered_data = []
+            prev_input = 0
+            prev_output = 0
+            alpha = 0.95  # High-pass filter coefficient
             
-            # Simple spectral subtraction
-            noise_sample_length = min(int(0.5 * sr), len(data) // 4)
-            noise_spectrum = np.abs(np.fft.fft(data[:noise_sample_length]))
+            for sample in data:
+                # High-pass filter: y[n] = alpha * (y[n-1] + x[n] - x[n-1])
+                output = alpha * (prev_output + sample - prev_input)
+                filtered_data.append(output)
+                prev_input = sample
+                prev_output = output
             
-            fft_data = np.fft.fft(data)
-            magnitude = np.abs(fft_data)
-            phase = np.angle(fft_data)
-            
-            noise_floor = np.mean(noise_spectrum)
-            enhanced_magnitude = np.maximum(magnitude - 0.5 * noise_floor, 0.1 * magnitude)
-            
-            enhanced_fft = enhanced_magnitude * np.exp(1j * phase)
-            data = np.real(np.fft.ifft(enhanced_fft))
+            data = filtered_data
         
-        # 2. Voice enhancement
+        # 2. Voice enhancement - boost mid frequencies
         if enhancement_type in ['voice', 'both']:
-            # Boost speech frequencies (300-3000 Hz)
-            nyquist = sr / 2
-            low_freq = 300 / nyquist
-            high_freq = 3000 / nyquist
+            # Simple resonant filter for speech frequencies
+            enhanced_data = []
+            delay_line = [0] * 10  # Simple delay line for resonance
             
-            b, a = signal.butter(4, [low_freq, high_freq], btype='band')
-            speech_band = signal.filtfilt(b, a, data)
+            for i, sample in enumerate(data):
+                # Add slight resonance at speech frequencies
+                delayed_sample = delay_line[i % len(delay_line)]
+                enhanced_sample = sample + 0.1 * delayed_sample
+                enhanced_data.append(enhanced_sample)
+                delay_line[i % len(delay_line)] = sample
             
-            # Mix with original
-            data = 0.7 * data + 0.3 * speech_band
+            data = enhanced_data
         
         # 3. Simple compression
-        def simple_compress(audio, threshold=0.7, ratio=2.0):
-            compressed = audio.copy()
-            for i in range(len(audio)):
-                if abs(audio[i]) > threshold:
-                    excess = abs(audio[i]) - threshold
-                    compressed_excess = excess / ratio
-                    new_level = threshold + compressed_excess
-                    compressed[i] = new_level * np.sign(audio[i])
-            return compressed
+        compressed_data = []
+        threshold = 0.7
+        ratio = 2.0
         
-        data = simple_compress(data)
+        for sample in data:
+            if abs(sample) > threshold:
+                excess = abs(sample) - threshold
+                compressed_excess = excess / ratio
+                new_level = threshold + compressed_excess
+                compressed_data.append(new_level * (1 if sample >= 0 else -1))
+            else:
+                compressed_data.append(sample)
+        
+        data = compressed_data
         
         # 4. Normalize
-        max_val = np.max(np.abs(data))
+        max_val = max(abs(sample) for sample in data)
         if max_val > 0:
-            data = data / max_val * 0.95
+            data = [sample / max_val * 0.95 for sample in data]
         
         # Save enhanced audio
         sf.write(output_path, data, sr, subtype='PCM_16')
