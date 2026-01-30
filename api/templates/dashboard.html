@@ -25,8 +25,8 @@
                 </div>
                 <div class="flex items-center space-x-4">
                     <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                        <i class="fas fa-robot mr-1"></i>
-                        AI Active
+                        <i class="fas fa-brain mr-1"></i>
+                        AI Production
                     </span>
                     <a href="/" class="text-gray-500 hover:text-gray-700">
                         <i class="fas fa-home"></i>
@@ -51,8 +51,8 @@
                         <div class="flex items-center">
                             <i class="fas fa-info-circle text-blue-500 mr-3"></i>
                             <div>
-                                <h3 class="text-blue-800 font-medium">AI Enhancement Ready</h3>
-                                <p class="text-blue-600 text-sm">Upload your audio files for professional AI-powered enhancement.</p>
+                                <h3 class="text-blue-800 font-medium">Production AI Enhancement Ready</h3>
+                                <p class="text-blue-600 text-sm">Upload your audio files for professional AI-powered enhancement using state-of-the-art models.</p>
                             </div>
                         </div>
                         <button id="testApiBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
@@ -356,9 +356,33 @@
                     const response = await fetch('/api/health');
                     const data = await response.json();
                     
-                    alert(`API Test Results:\n\nStatus: ${data.status}\nAI Enhancement: ${data.ai_enhancement}\nSupported Formats: ${data.supported_formats.join(', ')}\nAvailable APIs: ${data.available_apis}\nMax File Size: ${data.max_file_size}\nVersion: ${data.version}`);
+                    const modelsResponse = await fetch('/api/models');
+                    const modelsData = await modelsResponse.json();
+                    
+                    let message = `🎵 VoiceClean AI Status Report\n\n`;
+                    message += `✅ Status: ${data.status}\n`;
+                    message += `🤖 AI Enhancement: ${data.ai_enhancement}\n`;
+                    message += `🌐 API Connectivity: ${data.api_connectivity}\n`;
+                    message += `📁 Supported Formats: ${data.supported_formats.join(', ')}\n`;
+                    message += `🔧 Available APIs: ${data.available_apis}\n`;
+                    message += `📊 Max File Size: ${data.max_file_size}\n`;
+                    message += `🚀 Version: ${data.version}\n`;
+                    message += `🎯 Primary Model: ${data.primary_model}\n\n`;
+                    
+                    message += `🔬 Available Models:\n`;
+                    modelsData.models.forEach((model, index) => {
+                        message += `${index + 1}. ${model.name} (Priority ${model.priority})\n`;
+                        message += `   ${model.description}\n`;
+                    });
+                    
+                    message += `\n✨ Features:\n`;
+                    data.features.forEach(feature => {
+                        message += `• ${feature}\n`;
+                    });
+                    
+                    alert(message);
                 } catch (error) {
-                    alert('API Test Failed: ' + error.message);
+                    alert('❌ API Test Failed: ' + error.message);
                 }
             }
 

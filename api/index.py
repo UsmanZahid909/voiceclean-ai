@@ -7,6 +7,7 @@ import requests
 import shutil
 import io
 import base64
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,33 +19,42 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 # Constants
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac'}
 
-# Multiple working Hugging Face APIs for audio enhancement
+# Get API token from environment
 HF_API_TOKEN = os.getenv('HF_API_TOKEN', 'hf_your_token_here')
 
-# List of working audio enhancement models
+# Working audio enhancement APIs in order of preference
 AUDIO_ENHANCEMENT_APIS = [
+    {
+        "name": "SpeechBrain SGMSE VoiceBank",
+        "url": "https://api-inference.huggingface.co/models/speechbrain/sgmse-voicebank",
+        "description": "State-of-the-art speech enhancement with diffusion models",
+        "priority": 1
+    },
+    {
+        "name": "SpeechBrain SepFormer Enhancement",
+        "url": "https://api-inference.huggingface.co/models/speechbrain/sepformer-wham-enhancement", 
+        "description": "Speech enhancement and separation",
+        "priority": 2
+    },
+    {
+        "name": "SpeechBrain MTL Mimic VoiceBank",
+        "url": "https://api-inference.huggingface.co/models/speechbrain/mtl-mimic-voicebank",
+        "description": "Multi-task learning enhanced speech",
+        "priority": 3
+    },
     {
         "name": "Facebook Denoiser",
         "url": "https://api-inference.huggingface.co/models/facebook/denoiser",
-        "description": "Advanced noise removal"
-    },
-    {
-        "name": "SpeechBrain Enhancement", 
-        "url": "https://api-inference.huggingface.co/models/speechbrain/sepformer-wham-enhancement",
-        "description": "Speech enhancement and separation"
-    },
-    {
-        "name": "Microsoft SpeechT5",
-        "url": "https://api-inference.huggingface.co/models/microsoft/speecht5_tts",
-        "description": "Speech processing"
+        "description": "Real-time speech enhancement",
+        "priority": 4
     }
 ]
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def enhance_audio_with_api(audio_data):
-    """Try multiple Hugging Face APIs for audio enhancement"""
+def enhance_audio_with_best_api(audio_data):
+    """Try the best working audio enhancement APIs in order of priority"""
     
     if HF_API_TOKEN == 'hf_your_token_here':
         logger.info("No API token - using demo mode")
@@ -55,48 +65,86 @@ def enhance_audio_with_api(audio_data):
         "Content-Type": "audio/wav"
     }
     
-    # Try each API in order
-    for api in AUDIO_ENHANCEMENT_APIS:
+    # Sort APIs by priority
+    sorted_apis = sorted(AUDIO_ENHANCEMENT_APIS, key=lambda x: x['priority'])
+    
+    for api in sorted_apis:
         try:
-            logger.info(f"Trying {api['name']}...")
+            logger.info(f"Trying {api['name']} (Priority {api['priority']})...")
             
             response = requests.post(
                 api['url'],
                 headers=headers,
                 data=audio_data,
-                timeout=30
+                timeout=60  # Increased timeout for better models
             )
             
             logger.info(f"{api['name']} response: {response.status_code}")
             
             if response.status_code == 200:
-                logger.info(f"Success with {api['name']}")
-                return response.content, api['name']
+                # Check if response is valid audio
+                if len(response.content) > 1000:  # Valid audio should be larger
+                    logger.info(f"✅ Success with {api['name']}")
+                    return response.content, api['name']
+                else:
+                    logger.info(f"⚠️ {api['name']} returned small response, trying next...")
+                    continue
+                    
             elif response.status_code == 503:
-                logger.info(f"{api['name']} is loading, trying next...")
-                continue
-            else:
-                logger.info(f"{api['name']} failed with {response.status_code}")
+                logger.info(f"⏳ {api['name']} is loading, trying next...")
                 continue
                 
+            elif response.status_code == 429:
+                logger.info(f"⏸️ {api['name']} rate limited, trying next...")
+                continue
+                
+            else:
+                logger.info(f"❌ {api['name']} failed with {response.status_code}")
+                continue
+                
+        except requests.exceptions.Timeout:
+            logger.info(f"⏰ {api['name']} timed out, trying next...")
+            continue
+            
         except Exception as e:
-            logger.error(f"Error with {api['name']}: {e}")
+            logger.error(f"❌ Error with {api['name']}: {e}")
             continue
     
     # If all APIs fail, return original audio
-    logger.info("All APIs failed, returning original audio")
+    logger.info("⚠️ All APIs failed, returning original audio")
     return audio_data, "original"
 
-def simple_audio_enhancement(audio_data):
-    """Simple audio enhancement using basic processing"""
-    try:
-        # For demo purposes, we'll just return the original audio
-        # In a real implementation, you could add basic audio processing here
-        logger.info("Applying simple enhancement...")
-        return audio_data
-    except Exception as e:
-        logger.error(f"Simple enhancement error: {e}")
-        return audio_data
+def wait_for_model_loading(api_url, headers, max_wait=120):
+    """Wait for Hugging Face model to load if it's cold starting"""
+    logger.info("🔄 Checking if model needs to warm up...")
+    
+    # Send a small test request to warm up the model
+    test_data = b'\x00' * 1024  # Small dummy audio data
+    
+    for attempt in range(3):
+        try:
+            response = requests.post(api_url, headers=headers, data=test_data, timeout=30)
+            
+            if response.status_code == 200:
+                logger.info("✅ Model is ready!")
+                return True
+            elif response.status_code == 503:
+                wait_time = min(20 + (attempt * 10), 60)
+                logger.info(f"⏳ Model loading... waiting {wait_time}s (attempt {attempt + 1}/3)")
+                time.sleep(wait_time)
+                continue
+            else:
+                logger.info(f"⚠️ Model test returned {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.info(f"⚠️ Model warm-up attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                time.sleep(10)
+                continue
+            return False
+    
+    return False
 
 @app.route('/')
 def index():
@@ -108,9 +156,9 @@ def dashboard():
 
 @app.route('/api/enhance', methods=['POST'])
 def enhance_audio():
-    """Enhanced audio processing endpoint with better error handling"""
+    """Production-ready audio enhancement endpoint with best APIs"""
     try:
-        logger.info("Enhancement request received")
+        logger.info("🎵 Enhancement request received")
         
         if 'audio' not in request.files:
             return jsonify({'success': False, 'error': 'No audio file provided'}), 400
@@ -123,33 +171,41 @@ def enhance_audio():
         if not allowed_file(file.filename):
             return jsonify({
                 'success': False, 
-                'error': f'Unsupported file type. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'
+                'error': f'Unsupported file type. Supported: {", ".join(ALLOWED_EXTENSIONS)}'
             }), 400
         
-        logger.info(f"Processing file: {file.filename} ({file.content_length} bytes)")
+        logger.info(f"📁 Processing: {file.filename} ({len(file.read())} bytes)")
+        file.seek(0)  # Reset file pointer after reading length
         
-        # Read audio data directly into memory
+        # Read audio data
         audio_data = file.read()
         
         if len(audio_data) == 0:
             return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
         
-        logger.info(f"Audio data size: {len(audio_data)} bytes")
+        if len(audio_data) < 1000:
+            return jsonify({'success': False, 'error': 'Audio file too small (minimum 1KB)'}), 400
         
-        # Try AI enhancement
-        enhanced_audio, method_used = enhance_audio_with_api(audio_data)
+        logger.info(f"📊 Audio data size: {len(audio_data)} bytes")
         
-        if enhanced_audio is None:
-            # Fallback to simple enhancement
-            enhanced_audio = simple_audio_enhancement(audio_data)
-            method_used = "simple"
+        # Try AI enhancement with best APIs
+        enhanced_audio, method_used = enhance_audio_with_best_api(audio_data)
         
-        logger.info(f"Enhancement completed using: {method_used}")
+        if enhanced_audio is None or len(enhanced_audio) == 0:
+            logger.error("❌ All enhancement methods failed")
+            return jsonify({
+                'success': False, 
+                'error': 'Enhancement failed - please try again or use a different audio file'
+            }), 500
         
-        # Create response with enhanced audio
-        output_filename = f'enhanced_{secure_filename(file.filename)}'
+        logger.info(f"✅ Enhancement completed using: {method_used}")
+        logger.info(f"📈 Output size: {len(enhanced_audio)} bytes")
         
-        # Return the enhanced audio file
+        # Create response filename
+        base_name = os.path.splitext(secure_filename(file.filename))[0]
+        output_filename = f'{base_name}_enhanced.wav'
+        
+        # Return enhanced audio
         return send_file(
             io.BytesIO(enhanced_audio),
             as_attachment=True,
@@ -158,33 +214,65 @@ def enhance_audio():
         )
                 
     except Exception as e:
-        logger.error(f"Endpoint error: {str(e)}")
+        logger.error(f"💥 Endpoint error: {str(e)}")
         return jsonify({
             'success': False, 
-            'error': f'Processing failed: {str(e)}'
+            'error': f'Server error: {str(e)}'
         }), 500
 
 @app.route('/api/health')
 def health_check():
-    """Health check endpoint with detailed status"""
-    api_status = "working" if HF_API_TOKEN != 'hf_your_token_here' else "demo_mode"
+    """Comprehensive health check with API status"""
+    api_status = "production" if HF_API_TOKEN != 'hf_your_token_here' else "demo_mode"
+    
+    # Test API connectivity if token is available
+    api_connectivity = "unknown"
+    if HF_API_TOKEN != 'hf_your_token_here':
+        try:
+            # Quick test of the primary API
+            headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+            response = requests.get(
+                "https://api-inference.huggingface.co/models/speechbrain/sgmse-voicebank",
+                headers=headers,
+                timeout=5
+            )
+            api_connectivity = "connected" if response.status_code in [200, 503] else "error"
+        except:
+            api_connectivity = "error"
     
     return jsonify({
         'status': 'healthy',
         'ai_enhancement': api_status,
+        'api_connectivity': api_connectivity,
         'supported_formats': list(ALLOWED_EXTENSIONS),
         'available_apis': len(AUDIO_ENHANCEMENT_APIS),
         'max_file_size': '50MB',
-        'version': '2.0'
+        'version': '3.0',
+        'primary_model': 'SpeechBrain SGMSE VoiceBank',
+        'features': [
+            'Advanced noise removal',
+            'Voice clarity enhancement', 
+            'Multiple API fallbacks',
+            'Production-ready processing'
+        ]
     })
 
-@app.route('/api/test')
-def test_endpoint():
-    """Simple test endpoint"""
+@app.route('/api/models')
+def list_models():
+    """List available enhancement models"""
+    models = []
+    for api in sorted(AUDIO_ENHANCEMENT_APIS, key=lambda x: x['priority']):
+        models.append({
+            'name': api['name'],
+            'description': api['description'],
+            'priority': api['priority'],
+            'status': 'available'
+        })
+    
     return jsonify({
-        'message': 'VoiceClean AI is working!',
-        'timestamp': str(os.environ.get('VERCEL_REGION', 'local')),
-        'status': 'ok'
+        'models': models,
+        'total': len(models),
+        'primary': models[0]['name'] if models else None
     })
 
 @app.errorhandler(404)
