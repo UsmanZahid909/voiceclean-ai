@@ -5,18 +5,15 @@ gunicorn==21.2.0
 
 # Database
 flask-sqlalchemy==3.0.5
-flask-migrate==4.0.5
 
 # Authentication
 flask-login==0.6.3
 authlib==1.2.1
 
-# Audio processing
-librosa==0.10.1
+# Basic audio processing (Vercel-compatible)
 soundfile==0.12.1
 numpy==1.24.3
 scipy==1.11.3
-noisereduce==3.0.0
 
 # Web and API
 requests==2.31.0

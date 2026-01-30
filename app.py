@@ -5,10 +5,9 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from authlib.integrations.flask_client import OAuth
 import os
 import tempfile
-import librosa
 import soundfile as sf
 import numpy as np
-import noisereduce as nr
+from scipy import signal
 import logging
 from werkzeug.utils import secure_filename
 import time
@@ -51,187 +50,123 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
             'scope': 'openid email profile'
         }
     )
-    OAUTH_ENABLED = True
-else:
-    OAUTH_ENABLED = False
-    logger.warning("Google OAuth not configured. Running in demo mode.")
 
-# Configuration
-ALLOWED_EXTENSIONS = {'wav', 'mp3', 'm4a', 'flac', 'ogg', 'aac'}
-MAX_DAILY_ENHANCEMENTS = int(os.getenv('MAX_DAILY_ENHANCEMENTS', 3))
+# Constants
+ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac'}
+MAX_DAILY_ENHANCEMENTS = 3
 
 # Database Models
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    google_id = db.Column(db.String(100), unique=True, nullable=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    picture = db.Column(db.String(200))
+    google_id = db.Column(db.String(100), unique=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_demo = db.Column(db.Boolean, default=False)
-    
-    # Relationships
-    enhancements = db.relationship('Enhancement', backref='user', lazy=True)
 
 class Enhancement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    filename = db.Column(db.String(200), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
     enhancement_type = db.Column(db.String(50), nullable=False)
-    file_size = db.Column(db.Integer, nullable=False)
-    processing_time = db.Column(db.Float, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    processing_time = db.Column(db.Float)
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 def allowed_file(filename):
-    """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_daily_enhancement_count(user_id):
-    """Get the number of enhancements done today by the user"""
     today = datetime.utcnow().date()
-    tomorrow = today + timedelta(days=1)
-    
     count = Enhancement.query.filter(
         Enhancement.user_id == user_id,
-        Enhancement.created_at >= today,
-        Enhancement.created_at < tomorrow
+        db.func.date(Enhancement.created_at) == today
     ).count()
-    
     return count
 
 def create_demo_user():
-    """Create a demo user for testing without OAuth"""
     demo_user = User(
+        id=999999,
         email='demo@voiceclean.ai',
         name='Demo User',
-        picture='',
         is_demo=True
     )
-    db.session.add(demo_user)
-    db.session.commit()
     return demo_user
 
-def enhance_audio_advanced(audio_path, output_path, enhancement_type='both'):
+def enhance_audio_basic(audio_path, output_path, enhancement_type='both'):
     """
-    Advanced audio enhancement using multiple techniques
+    Basic audio enhancement using scipy (Vercel-compatible)
     """
     try:
         # Load audio file
-        y, sr = librosa.load(audio_path, sr=None)
-        logger.info(f"Loaded audio: {len(y)} samples at {sr} Hz")
+        data, sr = sf.read(audio_path)
+        logger.info(f"Loaded audio: {len(data)} samples at {sr} Hz")
         
-        if len(y) == 0:
+        if len(data) == 0:
             raise ValueError("Empty audio file")
         
-        original_y = y.copy()
+        # Convert to mono if stereo
+        if len(data.shape) > 1:
+            data = np.mean(data, axis=1)
         
-        # 1. Noise reduction using noisereduce library
+        # 1. Basic noise reduction
         if enhancement_type in ['noise', 'both']:
-            # Use noisereduce for better noise reduction
-            y = nr.reduce_noise(y=y, sr=sr, stationary=True, prop_decrease=0.8)
+            # High-pass filter to remove low-frequency noise
+            nyquist = sr / 2
+            low_cutoff = 80 / nyquist
+            b, a = signal.butter(4, low_cutoff, btype='high')
+            data = signal.filtfilt(b, a, data)
             
-            # Additional spectral gating
-            stft = librosa.stft(y, n_fft=2048, hop_length=512)
-            magnitude = np.abs(stft)
-            phase = np.angle(stft)
+            # Simple spectral subtraction
+            noise_sample_length = min(int(0.5 * sr), len(data) // 4)
+            noise_spectrum = np.abs(np.fft.fft(data[:noise_sample_length]))
             
-            # Adaptive noise floor estimation
-            noise_floor = np.percentile(magnitude, 10)
-            gate_threshold = noise_floor * 4
+            fft_data = np.fft.fft(data)
+            magnitude = np.abs(fft_data)
+            phase = np.angle(fft_data)
             
-            # Soft gating with smooth transitions
-            mask = magnitude / (magnitude + gate_threshold)
-            enhanced_magnitude = magnitude * mask
+            noise_floor = np.mean(noise_spectrum)
+            enhanced_magnitude = np.maximum(magnitude - 0.5 * noise_floor, 0.1 * magnitude)
             
-            # Reconstruct
-            enhanced_stft = enhanced_magnitude * np.exp(1j * phase)
-            y = librosa.istft(enhanced_stft, hop_length=512)
+            enhanced_fft = enhanced_magnitude * np.exp(1j * phase)
+            data = np.real(np.fft.ifft(enhanced_fft))
         
         # 2. Voice enhancement
         if enhancement_type in ['voice', 'both']:
-            # Multi-band processing
-            from scipy.signal import butter, filtfilt
-            
-            # High-pass filter to remove low-frequency noise
+            # Boost speech frequencies (300-3000 Hz)
             nyquist = sr / 2
-            low_cutoff = 85 / nyquist
-            b, a = butter(6, low_cutoff, btype='high')
-            y = filtfilt(b, a, y)
+            low_freq = 300 / nyquist
+            high_freq = 3000 / nyquist
             
-            # Enhance speech frequencies with EQ
-            stft = librosa.stft(y, n_fft=2048, hop_length=512)
-            freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+            b, a = signal.butter(4, [low_freq, high_freq], btype='band')
+            speech_band = signal.filtfilt(b, a, data)
             
-            # Create sophisticated frequency response
-            gain = np.ones_like(freqs)
-            
-            # Boost fundamental speech frequencies (200-800 Hz)
-            fundamental_mask = (freqs >= 200) & (freqs <= 800)
-            gain[fundamental_mask] = 1.4
-            
-            # Boost consonant clarity (2000-4000 Hz)
-            consonant_mask = (freqs >= 2000) & (freqs <= 4000)
-            gain[consonant_mask] = 1.3
-            
-            # Slight boost for presence (4000-8000 Hz)
-            presence_mask = (freqs >= 4000) & (freqs <= 8000)
-            gain[presence_mask] = 1.1
-            
-            # Apply frequency-dependent gain
-            magnitude = np.abs(stft)
-            phase = np.angle(stft)
-            enhanced_magnitude = magnitude * gain[:, np.newaxis]
-            
-            # Reconstruct
-            enhanced_stft = enhanced_magnitude * np.exp(1j * phase)
-            y = librosa.istft(enhanced_stft, hop_length=512)
+            # Mix with original
+            data = 0.7 * data + 0.3 * speech_band
         
-        # 3. Dynamic range processing
-        def soft_compress(audio, threshold=0.6, ratio=3.0, attack=0.003, release=0.1):
+        # 3. Simple compression
+        def simple_compress(audio, threshold=0.7, ratio=2.0):
             compressed = audio.copy()
-            envelope = 0.0
-            
             for i in range(len(audio)):
-                input_level = abs(audio[i])
-                
-                # Envelope follower
-                if input_level > envelope:
-                    envelope += (input_level - envelope) * attack
-                else:
-                    envelope += (input_level - envelope) * release
-                
-                # Apply compression
-                if envelope > threshold:
-                    excess = envelope - threshold
+                if abs(audio[i]) > threshold:
+                    excess = abs(audio[i]) - threshold
                     compressed_excess = excess / ratio
-                    gain = (threshold + compressed_excess) / envelope if envelope > 0 else 1
-                    compressed[i] = audio[i] * gain
-            
+                    new_level = threshold + compressed_excess
+                    compressed[i] = new_level * np.sign(audio[i])
             return compressed
         
-        y = soft_compress(y)
+        data = simple_compress(data)
         
-        # 4. Harmonic enhancement for voice clarity
-        if enhancement_type in ['voice', 'both']:
-            # Subtle harmonic excitation
-            harmonics = librosa.effects.harmonic(y)
-            y = 0.85 * y + 0.15 * harmonics
-        
-        # 5. Final normalization and limiting
-        # Normalize to prevent clipping
-        max_val = np.max(np.abs(y))
+        # 4. Normalize
+        max_val = np.max(np.abs(data))
         if max_val > 0:
-            y = y / max_val * 0.95
-        
-        # Soft limiting
-        y = np.tanh(y * 1.2) * 0.9
+            data = data / max_val * 0.95
         
         # Save enhanced audio
-        sf.write(output_path, y, sr, subtype='PCM_16')
+        sf.write(output_path, data, sr, subtype='PCM_16')
         logger.info(f"Enhanced audio saved to {output_path}")
         return True
         
@@ -250,55 +185,72 @@ def index():
                              daily_count=daily_count,
                              remaining=remaining,
                              max_daily=MAX_DAILY_ENHANCEMENTS)
-    return render_template('landing.html', oauth_enabled=OAUTH_ENABLED)
+    return render_template('landing.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    daily_count = get_daily_enhancement_count(current_user.id)
+    remaining = MAX_DAILY_ENHANCEMENTS - daily_count
+    
+    recent_enhancements = Enhancement.query.filter_by(user_id=current_user.id)\
+                                         .order_by(Enhancement.created_at.desc())\
+                                         .limit(10).all()
+    
+    return render_template('dashboard.html', 
+                         user=current_user, 
+                         daily_count=daily_count,
+                         remaining=remaining,
+                         max_daily=MAX_DAILY_ENHANCEMENTS,
+                         recent_enhancements=recent_enhancements)
 
 @app.route('/login')
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    
-    if not OAUTH_ENABLED:
-        # Demo mode - create or login demo user
-        demo_user = User.query.filter_by(email='demo@voiceclean.ai').first()
-        if not demo_user:
-            demo_user = create_demo_user()
+    if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+        redirect_uri = url_for('auth_callback', _external=True)
+        return google.authorize_redirect(redirect_uri)
+    else:
+        # Demo mode
+        demo_user = create_demo_user()
         login_user(demo_user)
-        return redirect(url_for('index'))
-    
-    redirect_uri = url_for('auth_callback', _external=True)
-    return google.authorize_redirect(redirect_uri)
+        flash('Welcome to VoiceClean AI! You are using demo mode.', 'info')
+        return redirect(url_for('dashboard'))
 
 @app.route('/auth/callback')
 def auth_callback():
-    if not OAUTH_ENABLED:
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         return redirect(url_for('login'))
     
-    token = google.authorize_access_token()
-    user_info = token.get('userinfo')
-    
-    if user_info:
-        user = User.query.filter_by(google_id=user_info['sub']).first()
+    try:
+        token = google.authorize_access_token()
+        user_info = token.get('userinfo')
         
-        if not user:
-            user = User(
-                google_id=user_info['sub'],
-                email=user_info['email'],
-                name=user_info['name'],
-                picture=user_info.get('picture', '')
-            )
-            db.session.add(user)
-            db.session.commit()
-        
-        login_user(user)
-        return redirect(url_for('index'))
+        if user_info:
+            user = User.query.filter_by(google_id=user_info['sub']).first()
+            
+            if not user:
+                user = User(
+                    email=user_info['email'],
+                    name=user_info['name'],
+                    google_id=user_info['sub']
+                )
+                db.session.add(user)
+                db.session.commit()
+            
+            login_user(user)
+            flash(f'Welcome back, {user.name}!', 'success')
+            return redirect(url_for('dashboard'))
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        flash('Authentication failed. Please try again.', 'error')
     
-    flash('Authentication failed. Please try again.', 'error')
     return redirect(url_for('index'))
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
+    flash('You have been logged out successfully.', 'info')
     return redirect(url_for('index'))
 
 @app.route('/api/enhance', methods=['POST'])
@@ -311,105 +263,90 @@ def enhance_audio():
             daily_count = get_daily_enhancement_count(current_user.id)
             if daily_count >= MAX_DAILY_ENHANCEMENTS:
                 return jsonify({
-                    'error': f'Daily limit reached. You can enhance {MAX_DAILY_ENHANCEMENTS} files per day.',
-                    'daily_count': daily_count,
-                    'max_daily': MAX_DAILY_ENHANCEMENTS
+                    'success': False,
+                    'error': f'Daily limit of {MAX_DAILY_ENHANCEMENTS} enhancements reached. Try again tomorrow!'
                 }), 429
         
-        # Validate request
+        # Check if file is present
         if 'audio' not in request.files:
-            return jsonify({'error': 'No audio file provided'}), 400
+            return jsonify({'success': False, 'error': 'No audio file provided'}), 400
         
-        audio_file = request.files['audio']
-        if audio_file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if not allowed_file(audio_file.filename):
-            return jsonify({'error': 'Invalid file type. Supported: WAV, MP3, M4A, FLAC, OGG, AAC'}), 400
-        
-        # Get enhancement options
+        file = request.files['audio']
         enhancement_type = request.form.get('type', 'both')
-        if enhancement_type not in ['noise', 'voice', 'both']:
-            enhancement_type = 'both'
         
-        # Secure filename
-        filename = secure_filename(audio_file.filename)
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({
+                'success': False, 
+                'error': f'Unsupported file type. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'
+            }), 400
         
         # Create temporary files
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_input:
-            audio_file.save(temp_input.name)
-            file_size = os.path.getsize(temp_input.name)
-            
             with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_output:
+                
+                # Save uploaded file
+                file.save(temp_input.name)
+                
+                # Process audio
                 start_time = time.time()
-                
-                # Enhance the audio
-                success = enhance_audio_advanced(temp_input.name, temp_output.name, enhancement_type)
-                
+                success = enhance_audio_basic(temp_input.name, temp_output.name, enhancement_type)
                 processing_time = time.time() - start_time
-                logger.info(f"Audio processing completed in {processing_time:.2f} seconds")
                 
                 if success:
-                    # Record the enhancement
-                    enhancement = Enhancement(
-                        user_id=current_user.id,
-                        filename=filename,
-                        enhancement_type=enhancement_type,
-                        file_size=file_size,
-                        processing_time=processing_time
-                    )
-                    db.session.add(enhancement)
-                    db.session.commit()
+                    # Record enhancement (skip for demo users)
+                    if not current_user.is_demo:
+                        enhancement = Enhancement(
+                            user_id=current_user.id,
+                            filename=secure_filename(file.filename),
+                            enhancement_type=enhancement_type,
+                            processing_time=processing_time
+                        )
+                        db.session.add(enhancement)
+                        db.session.commit()
                     
-                    # Return the enhanced audio file
+                    # Return enhanced file
                     return send_file(
                         temp_output.name,
                         as_attachment=True,
-                        download_name=f"enhanced_{filename}",
+                        download_name=f'enhanced_{secure_filename(file.filename)}',
                         mimetype='audio/wav'
                     )
                 else:
-                    return jsonify({'error': 'Audio enhancement failed'}), 500
-    
+                    return jsonify({
+                        'success': False,
+                        'error': 'Audio processing failed. Please try with a different file.'
+                    }), 500
+                
     except Exception as e:
-        logger.error(f"Error in enhance_audio endpoint: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-    
-    finally:
-        # Clean up temporary files
-        try:
-            if 'temp_input' in locals():
-                os.unlink(temp_input.name)
-            if 'temp_output' in locals():
-                os.unlink(temp_output.name)
-        except:
-            pass
+        logger.error(f"Enhancement error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'An unexpected error occurred. Please try again.'
+        }), 500
 
-@app.route('/api/usage')
+@app.route('/api/stats')
 @login_required
-def get_usage():
-    """Get user's usage statistics"""
-    daily_count = get_daily_enhancement_count(current_user.id)
-    total_count = Enhancement.query.filter_by(user_id=current_user.id).count()
-    
-    return jsonify({
-        'daily_count': daily_count,
-        'remaining': MAX_DAILY_ENHANCEMENTS - daily_count if not current_user.is_demo else 999,
-        'max_daily': MAX_DAILY_ENHANCEMENTS,
-        'total_count': total_count,
-        'is_demo': current_user.is_demo
-    })
-
-@app.route('/api/health')
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'version': '2.0.0',
-        'features': ['noise_reduction', 'voice_enhancement', 'google_auth', 'usage_limits'],
-        'supported_formats': list(ALLOWED_EXTENSIONS),
-        'oauth_enabled': OAUTH_ENABLED
-    })
+def get_stats():
+    """Get user statistics"""
+    try:
+        daily_count = get_daily_enhancement_count(current_user.id)
+        remaining = MAX_DAILY_ENHANCEMENTS - daily_count
+        
+        total_enhancements = Enhancement.query.filter_by(user_id=current_user.id).count()
+        
+        return jsonify({
+            'success': True,
+            'daily_count': daily_count,
+            'remaining': remaining,
+            'max_daily': MAX_DAILY_ENHANCEMENTS,
+            'total_enhancements': total_enhancements
+        })
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to fetch statistics'}), 500
 
 # SEO Routes
 @app.route('/sitemap.xml')
@@ -421,14 +358,12 @@ def sitemap():
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
         <loc>https://voiceclean.ai/</loc>
-        <lastmod>2024-01-30</lastmod>
         <changefreq>weekly</changefreq>
         <priority>1.0</priority>
     </url>
     <url>
-        <loc>https://voiceclean.ai/login</loc>
-        <lastmod>2024-01-30</lastmod>
-        <changefreq>monthly</changefreq>
+        <loc>https://voiceclean.ai/dashboard</loc>
+        <changefreq>daily</changefreq>
         <priority>0.8</priority>
     </url>
 </urlset>'''
@@ -449,33 +384,22 @@ Sitemap: https://voiceclean.ai/sitemap.xml'''
     
     return Response(robots_txt, mimetype='text/plain')
 
-@app.errorhandler(413)
-def too_large(e):
-    return jsonify({'error': f'File too large. Maximum size is {app.config["MAX_CONTENT_LENGTH"] // (1024*1024)}MB.'}), 413
-
+# Error handlers
 @app.errorhandler(404)
-def not_found(e):
-    return jsonify({'error': 'Endpoint not found'}), 404
+def not_found(error):
+    return render_template('landing.html'), 404
 
 @app.errorhandler(500)
-def internal_error(e):
-    return jsonify({'error': 'Internal server error'}), 500
+def internal_error(error):
+    return render_template('landing.html'), 500
+
+# Initialize database
+with app.app_context():
+    db.create_all()
 
 if __name__ == '__main__':
-    # Create database tables
-    with app.app_context():
-        db.create_all()
-    
-    # Run the app on port 3000
     port = int(os.environ.get('PORT', 3000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    print("🚀 VoiceClean AI - Professional SaaS Starting...")
-    print(f"🌐 NEW HOST: http://localhost:{port}")
-    print("🎯 Complete Audio Enhancement Platform")
-    print("✨ Google OAuth + AI Processing + Usage Limits")
-    print("💰 AdSense Ready + SEO Optimized")
-    print("📱 Mobile Responsive + Production Ready")
-    print("-" * 50)
-    
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    print(f"🎵 VoiceClean AI starting on port {port}")
+    print(f"🌐 Access your app at: http://localhost:{port}")
+    print(f"🚀 Ready to enhance audio with AI!")
+    app.run(host='0.0.0.0', port=port, debug=False)

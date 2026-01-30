@@ -95,3 +95,4 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+.env*.local
