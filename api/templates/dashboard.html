@@ -82,7 +82,7 @@
                             </div>
                         </label>
                         <div class="mt-4 text-sm text-gray-400">
-                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC • Max size: 50MB
+                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS, WMA, AMR • Max size: 55MB
                         </div>
                     </div>
                 </div>
@@ -193,14 +193,18 @@
                 const file = event.target.files[0];
                 if (!file) return;
 
-                const allowedTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/flac', 'audio/ogg', 'audio/aac', 'audio/mpeg'];
-                if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp3|wav|m4a|flac|ogg|aac)$/i)) {
-                    alert('Please select a valid audio file');
+                const allowedTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/flac', 'audio/ogg', 'audio/aac', 'audio/mpeg', 'audio/webm', 'audio/opus', 'audio/x-ms-wma', 'audio/amr'];
+                const allowedExtensions = ['mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus', 'wma', 'amr'];
+                
+                const fileExtension = file.name.split('.').pop().toLowerCase();
+                
+                if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+                    alert('Please select a valid audio file\nSupported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS, WMA, AMR');
                     return;
                 }
 
-                if (file.size > 50 * 1024 * 1024) {
-                    alert('File size must be less than 50MB');
+                if (file.size > 55 * 1024 * 1024) {
+                    alert('File size must be less than 55MB');
                     return;
                 }
 
