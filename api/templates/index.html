@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceClean AI - Professional Audio Enhancement</title>
+    <meta name="description" content="Professional AI-powered audio enhancement. Remove background noise and isolate voices with studio-quality results.">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Styles -->
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .hover-glow:hover {
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
+        
+        .floating {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pulse-glow {
+            from { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+            to { box-shadow: 0 0 40px rgba(102, 126, 234, 0.8); }
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full z-50 glass-effect">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xl font-semibold">VoiceClean AI</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#features" class="text-gray-300 hover:text-white transition-colors">Features</a>
+                    <a href="#how-it-works" class="text-gray-300 hover:text-white transition-colors">How it Works</a>
+                    <a href="/dashboard" class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all">
+                        Get Started
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="pt-32 pb-20 px-6">
+        <div class="max-w-6xl mx-auto text-center">
+            <!-- Floating Icon -->
+            <div class="floating mb-8">
+                <div class="w-20 h-20 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto pulse-glow">
+                    <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+            </div>
+            
+            <!-- Main Heading -->
+            <h1 class="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+                Professional
+                <span class="gradient-text block">Audio Enhancement</span>
+            </h1>
+            
+            <!-- Subtitle -->
+            <p class="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
+                Remove background noise, isolate voices, and transform your audio into studio-quality recordings with AI-powered precision.
+            </p>
+            
+            <!-- CTA Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+                <a href="/dashboard" class="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover-glow transition-all">
+                    <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                    </svg>
+                    Start Enhancing Audio
+                </a>
+                <button class="glass-effect px-8 py-4 rounded-xl font-medium text-gray-300 hover:text-white transition-all">
+                    <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+                    </svg>
+                    Watch Demo
+                </button>
+            </div>
+            
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-2xl mx-auto">
+                <div class="text-center">
+                    <div class="text-3xl font-bold gradient-text">55MB</div>
+                    <div class="text-gray-400">Max File Size</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold gradient-text">Studio</div>
+                    <div class="text-gray-400">Quality Output</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl font-bold gradient-text">AI</div>
+                    <div class="text-gray-400">Powered</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 px-6">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">
+                    Powered by <span class="gradient-text">ElevenLabs</span>
+                </h2>
+                <p class="text-xl text-gray-300 max-w-2xl mx-auto">
+                    Professional-grade audio enhancement using cutting-edge AI technology
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="glass-effect p-8 rounded-2xl hover-glow">
+                    <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-4">Voice Isolation</h3>
+                    <p class="text-gray-300 leading-relaxed">
+                        Advanced AI isolates human speech from background noise, music, and environmental sounds with precision.
+                    </p>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="glass-effect p-8 rounded-2xl hover-glow">
+                    <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-teal-500 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-4">Noise Removal</h3>
+                    <p class="text-gray-300 leading-relaxed">
+                        Eliminate unwanted background noise, hums, static, and interference for crystal-clear audio quality.
+                    </p>
+                </div>
+                
+                <!-- Feature 3 -->
+                <div class="glass-effect p-8 rounded-2xl hover-glow">
+                    <div class="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-4">Studio Quality</h3>
+                    <p class="text-gray-300 leading-relaxed">
+                        Transform any recording into professional, studio-quality audio suitable for podcasts, interviews, and content creation.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it Works -->
+    <section id="how-it-works" class="py-20 px-6">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">How It Works</h2>
+                <p class="text-xl text-gray-300">Simple, fast, and professional</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold text-xl">1</div>
+                    <h3 class="text-lg font-semibold mb-2">Upload</h3>
+                    <p class="text-gray-400">Upload your audio file (up to 55MB)</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold text-xl">2</div>
+                    <h3 class="text-lg font-semibold mb-2">Process</h3>
+                    <p class="text-gray-400">AI analyzes and enhances your audio</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-green-500 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold text-xl">3</div>
+                    <h3 class="text-lg font-semibold mb-2">Enhance</h3>
+                    <p class="text-gray-400">Background noise removed, voice isolated</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold text-xl">4</div>
+                    <h3 class="text-lg font-semibold mb-2">Download</h3>
+                    <p class="text-gray-400">Get your studio-quality audio</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <div class="glass-effect p-12 rounded-3xl">
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                    Ready to enhance your audio?
+                </h2>
+                <p class="text-xl text-gray-300 mb-8">
+                    Transform your recordings into professional-quality audio in seconds
+                </p>
+                <a href="/dashboard" class="bg-gradient-to-r from-purple-600 to-blue-600 px-12 py-4 rounded-xl font-semibold text-lg hover-glow transition-all inline-block">
+                    Start Now - It's Free
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 px-6 border-t border-gray-800">
+        <div class="max-w-6xl mx-auto">
+            <div class="flex flex-col md:flex-row items-center justify-between">
+                <div class="flex items-center space-x-3 mb-4 md:mb-0">
+                    <div class="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span class="text-xl font-semibold">VoiceClean AI</span>
+                </div>
+                <div class="text-gray-400">
+                    © 2024 VoiceClean AI. Powered by ElevenLabs technology.
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
