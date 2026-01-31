@@ -82,7 +82,7 @@
                             </div>
                         </label>
                         <div class="mt-4 text-sm text-gray-400">
-                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS, WMA, AMR • Max size: 55MB
+                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS • Max size: 50MB
                         </div>
                     </div>
                 </div>
@@ -203,8 +203,8 @@
                     return;
                 }
 
-                if (file.size > 55 * 1024 * 1024) {
-                    alert('File size must be less than 55MB');
+                if (file.size > 50 * 1024 * 1024) {
+                    alert('File size must be less than 50MB');
                     return;
                 }
 
