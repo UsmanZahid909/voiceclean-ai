@@ -239,7 +239,7 @@ def health_check():
 def test_endpoint():
     """Test endpoint"""
     return jsonify({
-        'message': 'VoiceClean AI v13.0 - Large File Support Enabled!',
+        'message': 'VoiceClean AI v13.0 - Large File Support (55MB) - LIVE!',
         'timestamp': time.time(),
         'status': 'operational',
         'enhancement': 'elevenlabs_streaming',
