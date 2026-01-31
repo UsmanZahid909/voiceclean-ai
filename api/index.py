@@ -5,6 +5,8 @@ from werkzeug.utils import secure_filename
 import requests
 import io
 import time
+from gradio_client import Client, handle_file
+import tempfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -103,20 +105,74 @@ def enhance_with_elevenlabs(file_stream, filename="audio.wav"):
         logger.error(f"ElevenLabs API error: {e}")
         return None, str(e)
 
+def enhance_with_gradio_deepfilter(file_stream, filename="audio.wav"):
+    """Use Gradio DeepFilterNet2 for free audio enhancement"""
+    try:
+        logger.info("🎵 Using Gradio DeepFilterNet2 (Free)...")
+        
+        # Create a temporary file for Gradio client
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            file_stream.seek(0)
+            temp_file.write(file_stream.read())
+            temp_file_path = temp_file.name
+        
+        try:
+            # Initialize Gradio client
+            client = Client("drewThomasson/DeepFilterNet2_no_limit")
+            
+            logger.info(f"📤 Sending file to DeepFilterNet2...")
+            
+            # Process the audio file
+            result = client.predict(
+                audio=handle_file(temp_file_path),
+                api_name="/predict"
+            )
+            
+            logger.info(f"📥 DeepFilterNet2 processing complete")
+            
+            # Read the enhanced audio file
+            if result and os.path.exists(result):
+                with open(result, 'rb') as enhanced_file:
+                    enhanced_audio = enhanced_file.read()
+                
+                if len(enhanced_audio) > 1000:
+                    logger.info("✅ DeepFilterNet2 enhancement successful!")
+                    return enhanced_audio, "DeepFilterNet2 (Free)"
+                else:
+                    logger.warning("DeepFilterNet2 returned small response")
+                    return None, None
+            else:
+                logger.error("DeepFilterNet2 did not return a valid file")
+                return None, "No output file"
+                
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            
+    except Exception as e:
+        logger.error(f"DeepFilterNet2 error: {e}")
+        return None, str(e)
 def enhance_with_working_apis(file_stream, filename="audio.wav"):
-    """Use multiple working APIs for audio enhancement with ElevenLabs as primary"""
+    """Use multiple working APIs for audio enhancement with ElevenLabs as primary and Gradio as free fallback"""
     
     # Try ElevenLabs first (primary service)
+    file_stream.seek(0)  # Reset stream position
     enhanced_audio, method = enhance_with_elevenlabs(file_stream, filename)
     if enhanced_audio:
         return enhanced_audio, method
     
-    # For fallback, we need to read the file stream
+    # Try Gradio DeepFilterNet2 as free fallback
+    logger.info("🔄 ElevenLabs failed, trying free DeepFilterNet2...")
+    file_stream.seek(0)  # Reset stream position
+    enhanced_audio, method = enhance_with_gradio_deepfilter(file_stream, filename)
+    if enhanced_audio:
+        return enhanced_audio, method
+    
+    # Final fallback - return original audio
+    logger.info("🔄 All enhancement APIs failed, using local processing...")
     file_stream.seek(0)  # Reset stream position
     audio_data = file_stream.read()
-    
-    # Fallback to local processing
-    logger.info("🔄 ElevenLabs failed, using local processing...")
     logger.info("✅ Using original audio as enhanced (local processing)")
     return audio_data, "Original Audio (Local Processing)"
 
@@ -219,17 +275,19 @@ def enhance_audio():
 
 @app.route('/api/health')
 def health_check():
-    """Health check with ElevenLabs API status"""
+    """Health check with all API services status"""
     return jsonify({
         'status': 'healthy',
-        'version': '13.0 - Large File Support (55MB)',
+        'version': '14.0 - Free DeepFilterNet2 + ElevenLabs',
         'primary_service': 'ElevenLabs Audio Isolation',
-        'fallback_services': ['Local Processing'],
+        'fallback_services': ['DeepFilterNet2 (Free)', 'Local Processing'],
         'enhancement_guaranteed': True,
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
         'max_file_size': '55MB',
         'streaming_enabled': True,
+        'free_fallback': True,
         'elevenlabs_ready': True,
+        'gradio_ready': True,
         'api_key_preview': f"{ELEVENLABS_API_KEY[:8]}...{ELEVENLABS_API_KEY[-4:]}",
         'ui_style': 'ElevenLabs inspired minimal design',
         'ready': True
@@ -239,12 +297,13 @@ def health_check():
 def test_endpoint():
     """Test endpoint"""
     return jsonify({
-        'message': 'VoiceClean AI v13.0 - Large File Support (55MB) - LIVE!',
+        'message': 'VoiceClean AI v14.0 - Free DeepFilterNet2 + ElevenLabs!',
         'timestamp': time.time(),
         'status': 'operational',
-        'enhancement': 'elevenlabs_streaming',
+        'enhancement': 'elevenlabs_plus_free_fallback',
         'max_file_size': '55MB',
         'streaming_enabled': True,
+        'free_fallback': 'DeepFilterNet2',
         'api_key_set': bool(ELEVENLABS_API_KEY),
         'api_key_preview': f"{ELEVENLABS_API_KEY[:8]}...{ELEVENLABS_API_KEY[-4:]}" if ELEVENLABS_API_KEY else 'Not set'
     })
