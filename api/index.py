@@ -30,8 +30,8 @@ FIREBASE_CONFIG = {
     "projectId": os.getenv('FIREBASE_PROJECT_ID', 'avian-mystery-433509-u5'),
     "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', 'avian-mystery-433509-u5.firebasestorage.app'),
     "messagingSenderId": os.getenv('FIREBASE_MESSAGING_SENDER_ID', '454829723768'),
-    "appId": os.getenv('FIREBASE_APP_ID', '1:454829723768:web:ec36f24d8df4f882499d8d'),
-    "measurementId": os.getenv('FIREBASE_MEASUREMENT_ID', 'G-G35LS3E4P7'),
+    "appId": os.getenv('FIREBASE_APP_ID', '1:454829723768:web:8bce5f5ecd1bc5f0499d8d'),
+    "measurementId": os.getenv('FIREBASE_MEASUREMENT_ID', 'G-1RCP94S156'),
     "databaseURL": os.getenv('FIREBASE_DATABASE_URL', 'https://avian-mystery-433509-u5-default-rtdb.firebaseio.com/')
 }
 
