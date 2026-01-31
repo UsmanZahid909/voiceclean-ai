@@ -125,11 +125,7 @@ def health_check():
 @app.route('/test')
 def test_route():
     """Simple test route to verify deployment"""
-    return jsonify({
-        'message': 'Test route working!',
-        'timestamp': datetime.now().isoformat(),
-        'login_signup_buttons': 'should be visible in navigation'
-    })
+    return render_template('test.html', timestamp=datetime.now().isoformat())
 
 @app.route('/api/debug')
 def debug_info():
