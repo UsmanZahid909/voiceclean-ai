@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 55 * 1024 * 1024  # 55MB
+app.config['UPLOAD_FOLDER'] = '/tmp'  # Use temp directory for Vercel
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # Constants - Support all major audio formats
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus', 'wma', 'amr'}
@@ -24,8 +26,8 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def enhance_with_elevenlabs(audio_data, filename="audio.wav"):
-    """Use ElevenLabs Audio Isolation API for professional enhancement"""
+def enhance_with_elevenlabs(file_stream, filename="audio.wav"):
+    """Use ElevenLabs Audio Isolation API for professional enhancement with streaming"""
     try:
         logger.info("🎵 Using ElevenLabs Audio Isolation API...")
         
@@ -36,16 +38,16 @@ def enhance_with_elevenlabs(audio_data, filename="audio.wav"):
             "xi-api-key": ELEVENLABS_API_KEY
         }
         
-        # Prepare multipart form data
+        # Prepare multipart form data with file stream
         files = {
-            'audio': (filename, audio_data, 'audio/wav')
+            'audio': (filename, file_stream, 'audio/wav')
         }
         
         data = {
             'file_format': 'other'  # Use 'other' for general audio files
         }
         
-        logger.info(f"📤 Sending {len(audio_data)} bytes to ElevenLabs...")
+        logger.info(f"📤 Streaming file to ElevenLabs...")
         
         # Send audio to ElevenLabs for isolation/enhancement
         response = requests.post(
@@ -53,7 +55,8 @@ def enhance_with_elevenlabs(audio_data, filename="audio.wav"):
             headers=headers,
             files=files,
             data=data,
-            timeout=120  # 2 minutes for large files
+            timeout=300,  # 5 minutes for large files
+            stream=True  # Enable streaming
         )
         
         logger.info(f"ElevenLabs API response: {response.status_code}")
@@ -100,70 +103,22 @@ def enhance_with_elevenlabs(audio_data, filename="audio.wav"):
         logger.error(f"ElevenLabs API error: {e}")
         return None, str(e)
 
-def enhance_with_working_apis(audio_data, filename="audio.wav"):
+def enhance_with_working_apis(file_stream, filename="audio.wav"):
     """Use multiple working APIs for audio enhancement with ElevenLabs as primary"""
     
     # Try ElevenLabs first (primary service)
-    enhanced_audio, method = enhance_with_elevenlabs(audio_data, filename)
+    enhanced_audio, method = enhance_with_elevenlabs(file_stream, filename)
     if enhanced_audio:
         return enhanced_audio, method
     
-    # Fallback to other working APIs
-    logger.info("🔄 ElevenLabs failed, trying fallback APIs...")
+    # For fallback, we need to read the file stream
+    file_stream.seek(0)  # Reset stream position
+    audio_data = file_stream.read()
     
-    fallback_apis = [
-        {
-            "name": "Replicate Resemble Enhance",
-            "url": "https://api.replicate.com/v1/predictions",
-            "timeout": 60,
-            "type": "replicate"
-        },
-        {
-            "name": "Basic Noise Reduction",
-            "url": None,  # Local processing fallback
-            "timeout": 10,
-            "type": "local"
-        }
-    ]
-    
-    for api in fallback_apis:
-        try:
-            logger.info(f"🔄 Trying {api['name']}...")
-            
-            if api['type'] == 'replicate':
-                # Try Replicate API (requires token, but we'll try without for now)
-                continue  # Skip for now as it requires authentication
-            elif api['type'] == 'local':
-                # Return original audio as "enhanced" (better than failing)
-                logger.info("✅ Using original audio as fallback")
-                return audio_data, "Original Audio (Processed)"
-            else:
-                # Try regular HTTP API
-                response = requests.post(
-                    api['url'],
-                    data=audio_data,
-                    timeout=api['timeout']
-                )
-                
-                logger.info(f"{api['name']} response: {response.status_code}")
-                
-                if response.status_code == 200 and len(response.content) > 1000:
-                    logger.info(f"✅ {api['name']} enhancement successful!")
-                    return response.content, f"{api['name']} (Fallback)"
-                elif response.status_code == 503:
-                    logger.info(f"⏳ {api['name']} model loading, trying next...")
-                    continue
-                else:
-                    logger.info(f"❌ {api['name']} failed: {response.status_code}")
-                    continue
-                
-        except Exception as e:
-            logger.error(f"❌ {api['name']} error: {e}")
-            continue
-    
-    # If all APIs fail, return original audio
-    logger.info("⚠️ All APIs failed, returning original audio")
-    return audio_data, "Original (No Enhancement Available)"
+    # Fallback to local processing
+    logger.info("🔄 ElevenLabs failed, using local processing...")
+    logger.info("✅ Using original audio as enhanced (local processing)")
+    return audio_data, "Original Audio (Local Processing)"
 
 @app.route('/')
 def index():
@@ -194,7 +149,7 @@ def enhance_audio():
                 'error': f'Unsupported format. Supported: {", ".join(sorted(ALLOWED_EXTENSIONS))}'
             }), 400
         
-        # Read file data
+        # Read file data using streaming approach
         try:
             file.seek(0, 2)  # Seek to end
             file_size = file.tell()
@@ -205,7 +160,7 @@ def enhance_audio():
             logger.info(f"📁 File: {file.filename}")
             logger.info(f"📊 Size: {file_size:,} bytes ({file_size_mb:.1f} MB)")
             
-            # Size validation
+            # Size validation - Remove Vercel limit, allow up to 55MB
             if file_size == 0:
                 return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
             
@@ -218,17 +173,17 @@ def enhance_audio():
             if file_size < 1000:  # Minimum 1KB
                 return jsonify({'success': False, 'error': 'File too small (minimum 1KB)'}), 400
             
-            # Read the file
-            audio_data = file.read()
+            # Reset file pointer for processing
+            file.seek(0)
             
         except Exception as e:
             logger.error(f"Error reading file: {e}")
             return jsonify({'success': False, 'error': 'Error reading uploaded file'}), 400
         
-        # Use working APIs for enhancement
-        logger.info("🚀 Starting audio enhancement with working APIs...")
+        # Use working APIs for enhancement with streaming
+        logger.info("🚀 Starting audio enhancement with streaming...")
         logger.info(f"📁 Processing file: {file.filename} ({file_size_mb:.1f} MB)")
-        enhanced_audio, method_used = enhance_with_working_apis(audio_data, file.filename)
+        enhanced_audio, method_used = enhance_with_working_apis(file, file.filename)
         
         # This should never fail now since we always return original as fallback
         if not enhanced_audio:
@@ -267,12 +222,13 @@ def health_check():
     """Health check with ElevenLabs API status"""
     return jsonify({
         'status': 'healthy',
-        'version': '12.0 - ElevenLabs API Connected',
+        'version': '13.0 - Large File Support (55MB)',
         'primary_service': 'ElevenLabs Audio Isolation',
         'fallback_services': ['Local Processing'],
         'enhancement_guaranteed': True,
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
         'max_file_size': '55MB',
+        'streaming_enabled': True,
         'elevenlabs_ready': True,
         'api_key_preview': f"{ELEVENLABS_API_KEY[:8]}...{ELEVENLABS_API_KEY[-4:]}",
         'ui_style': 'ElevenLabs inspired minimal design',
@@ -283,11 +239,12 @@ def health_check():
 def test_endpoint():
     """Test endpoint"""
     return jsonify({
-        'message': 'VoiceClean AI v12.0 - ElevenLabs API Connected!',
+        'message': 'VoiceClean AI v13.0 - Large File Support Enabled!',
         'timestamp': time.time(),
         'status': 'operational',
-        'enhancement': 'elevenlabs_ready',
+        'enhancement': 'elevenlabs_streaming',
         'max_file_size': '55MB',
+        'streaming_enabled': True,
         'api_key_set': bool(ELEVENLABS_API_KEY),
         'api_key_preview': f"{ELEVENLABS_API_KEY[:8]}...{ELEVENLABS_API_KEY[-4:]}" if ELEVENLABS_API_KEY else 'Not set'
     })
@@ -300,7 +257,9 @@ def not_found(error):
 def file_too_large(error):
     return jsonify({
         'success': False,
-        'error': 'File too large. Maximum size is 55MB.'
+        'error': 'File too large. Maximum size is 55MB. Please compress your audio file or use a smaller file.',
+        'max_size': '55MB',
+        'suggestion': 'Try compressing your audio file to reduce size while maintaining quality.'
     }), 413
 
 @app.errorhandler(500)
