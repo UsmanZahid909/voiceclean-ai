@@ -668,7 +668,7 @@ def health_check():
     """Health check with Firebase + Stripe integration"""
     return jsonify({
         'status': 'healthy',
-        'version': '21.0 - Firebase Auth + Usage Limits + Stripe Ready',
+        'version': 'Firebase-Auth-Complete-v2.0',
         'primary_service': 'DeepFilterNet2 (drewThomasson/DeepFilterNet2_no_limit)',
         'authentication': 'Firebase Auth',
         'database': 'In-memory (Firestore ready)',
