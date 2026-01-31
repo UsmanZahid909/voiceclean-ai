@@ -6,20 +6,11 @@
     <title>Login - VoiceClean AI</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
         }
-        
-        .gradient-text {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
         .glass-effect {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
@@ -30,7 +21,6 @@
 <body class="min-h-screen text-white flex items-center justify-center">
     <div class="max-w-md w-full mx-4">
         <div class="glass-effect rounded-3xl p-8">
-            <!-- Logo -->
             <div class="text-center mb-8">
                 <div class="w-16 h-16 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -41,7 +31,6 @@
                 <p class="text-gray-400">Sign in to your VoiceClean AI account</p>
             </div>
 
-            <!-- Login Form -->
             <form id="loginForm" class="space-y-6">
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
@@ -58,14 +47,12 @@
                 </button>
             </form>
 
-            <!-- Divider -->
             <div class="my-6 flex items-center">
                 <div class="flex-1 border-t border-gray-600"></div>
                 <span class="px-4 text-gray-400 text-sm">or</span>
                 <div class="flex-1 border-t border-gray-600"></div>
             </div>
 
-            <!-- Google Sign In -->
             <button id="googleSignIn" class="w-full glass-effect py-3 rounded-xl font-medium hover:bg-white hover:bg-opacity-10 transition-all flex items-center justify-center space-x-3">
                 <svg class="w-5 h-5" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -76,7 +63,6 @@
                 <span>Continue with Google</span>
             </button>
 
-            <!-- Links -->
             <div class="mt-6 text-center space-y-2">
                 <p class="text-gray-400">
                     Don't have an account? 
@@ -87,33 +73,31 @@
         </div>
     </div>
 
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 
     <script>
-        // Firebase configuration
-        const firebaseConfig = {{ firebase_config | tojsonfilter }};
-        
-        // Initialize Firebase
+        const firebaseConfig = {
+            "apiKey": "AIzaSyF29QM3C0pri4z5say9nu4a",
+            "authDomain": "voiceclean-ai-say9nu4a.firebaseapp.com",
+            "projectId": "voiceclean-ai-say9nu4a",
+            "storageBucket": "voiceclean-ai-say9nu4a.appspot.com",
+            "messagingSenderId": "454829723768",
+            "appId": "1:454829723768:web:ec36f24d8df4f882499d8d",
+            "measurementId": "G-G35LS3E4P7"
+        };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
 
-        // Google Sign In
         document.getElementById('googleSignIn').addEventListener('click', async () => {
             try {
                 const provider = new firebase.auth.GoogleAuthProvider();
                 const result = await auth.signInWithPopup(provider);
-                
-                // Get ID token
                 const idToken = await result.user.getIdToken();
                 
-                // Verify with backend
                 const response = await fetch('/api/auth/verify', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ idToken })
                 });
                 
@@ -129,10 +113,8 @@
             }
         });
 
-        // Email/Password Sign In
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             
@@ -140,12 +122,9 @@
                 const result = await auth.signInWithEmailAndPassword(email, password);
                 const idToken = await result.user.getIdToken();
                 
-                // Verify with backend
                 const response = await fetch('/api/auth/verify', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ idToken })
                 });
                 

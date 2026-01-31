@@ -302,7 +302,15 @@
     <!-- JavaScript -->
     <script>
         // Firebase configuration
-        const firebaseConfig = {{ firebase_config | tojsonfilter }};
+        const firebaseConfig = {
+            "apiKey": "AIzaSyF29QM3C0pri4z5say9nu4a",
+            "authDomain": "voiceclean-ai-say9nu4a.firebaseapp.com",
+            "projectId": "voiceclean-ai-say9nu4a",
+            "storageBucket": "voiceclean-ai-say9nu4a.appspot.com",
+            "messagingSenderId": "454829723768",
+            "appId": "1:454829723768:web:ec36f24d8df4f882499d8d",
+            "measurementId": "G-G35LS3E4P7"
+        };
         
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
