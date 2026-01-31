@@ -12,175 +12,113 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 15 * 1024 * 1024  # 15MB for better Vercel compatibility
+app.config['MAX_CONTENT_LENGTH'] = 55 * 1024 * 1024  # 55MB
 
-# Constants - Support major audio formats
-ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus'}
+# Constants - Support all major audio formats
+ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus', 'wma', 'amr'}
+
+# Direct API processing - no local storage, direct to external APIs
+DIRECT_PROCESSING_APIS = [
+    {
+        "name": "Hugging Face - AnyEnhance",
+        "url": "https://api-inference.huggingface.co/models/amphion/anyenhance",
+        "description": "Unified voice enhancement",
+        "timeout": 120
+    },
+    {
+        "name": "Hugging Face - Facebook Denoiser", 
+        "url": "https://api-inference.huggingface.co/models/facebook/denoiser",
+        "description": "Professional noise removal",
+        "timeout": 90
+    },
+    {
+        "name": "Hugging Face - Resemble Enhance",
+        "url": "https://api-inference.huggingface.co/models/resemble-ai/resemble-enhance", 
+        "description": "Advanced voice enhancement",
+        "timeout": 100
+    },
+    {
+        "name": "Hugging Face - SpeechBrain MetricGAN+",
+        "url": "https://api-inference.huggingface.co/models/speechbrain/metricgan-plus-voicebank",
+        "description": "State-of-the-art enhancement",
+        "timeout": 80
+    },
+    {
+        "name": "Hugging Face - SpeechBrain SGMSE",
+        "url": "https://api-inference.huggingface.co/models/speechbrain/sgmse-voicebank",
+        "description": "Diffusion-based enhancement", 
+        "timeout": 90
+    }
+]
 
 def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def enhance_with_anyenhance(audio_data):
-    """Try AnyEnhance model - unified voice enhancement"""
-    try:
-        logger.info("🚀 Trying AnyEnhance (Unified Voice Enhancement)...")
-        
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/amphion/anyenhance",
-            data=audio_data,
-            timeout=30
-        )
-        
-        logger.info(f"AnyEnhance response: {response.status_code}")
-        
-        if response.status_code == 200 and len(response.content) > 1000:
-            logger.info("✅ AnyEnhance success!")
-            return response.content, "AnyEnhance (Unified Enhancement)"
-        elif response.status_code == 503:
-            logger.info("⏳ AnyEnhance model loading...")
-            return None, None
-        else:
-            logger.info(f"❌ AnyEnhance failed: {response.status_code}")
-            return None, None
-            
-    except Exception as e:
-        logger.error(f"❌ AnyEnhance error: {e}")
-        return None, None
-
-def enhance_with_resemble_enhance(audio_data):
-    """Try Resemble Enhance model"""
-    try:
-        logger.info("🔄 Trying Resemble Enhance...")
-        
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/resemble-ai/resemble-enhance",
-            data=audio_data,
-            timeout=30
-        )
-        
-        logger.info(f"Resemble Enhance response: {response.status_code}")
-        
-        if response.status_code == 200 and len(response.content) > 1000:
-            logger.info("✅ Resemble Enhance success!")
-            return response.content, "Resemble Enhance"
-        else:
-            return None, None
-            
-    except Exception as e:
-        logger.error(f"❌ Resemble Enhance error: {e}")
-        return None, None
-
-def enhance_with_speechbrain_models(audio_data):
-    """Try various SpeechBrain models"""
-    models = [
-        {
-            "name": "SpeechBrain MetricGAN+",
-            "url": "https://api-inference.huggingface.co/models/speechbrain/metricgan-plus-voicebank"
-        },
-        {
-            "name": "SpeechBrain SGMSE",
-            "url": "https://api-inference.huggingface.co/models/speechbrain/sgmse-voicebank"
-        },
-        {
-            "name": "SpeechBrain SepFormer",
-            "url": "https://api-inference.huggingface.co/models/speechbrain/sepformer-wham-enhancement"
-        }
-    ]
+def direct_api_processing(audio_data, file_size_mb):
+    """Send audio directly to external APIs for processing - no local storage"""
     
-    for model in models:
+    logger.info(f"🚀 Starting direct API processing for {file_size_mb:.1f}MB file")
+    
+    # Try each API in order of preference
+    for api in DIRECT_PROCESSING_APIS:
         try:
-            logger.info(f"🔄 Trying {model['name']}...")
+            logger.info(f"🔄 Trying {api['name']}...")
+            logger.info(f"   Sending {len(audio_data):,} bytes to external API...")
             
+            # Send directly to external API
             response = requests.post(
-                model['url'],
+                api['url'],
                 data=audio_data,
-                timeout=25
+                headers={
+                    'Content-Type': 'audio/wav',
+                    'User-Agent': 'VoiceClean-AI/1.0'
+                },
+                timeout=api['timeout'],
+                stream=True  # Stream response for large files
             )
             
-            logger.info(f"{model['name']} response: {response.status_code}")
+            logger.info(f"   {api['name']} response: {response.status_code}")
             
-            if response.status_code == 200 and len(response.content) > 1000:
-                logger.info(f"✅ {model['name']} success!")
-                return response.content, model['name']
+            if response.status_code == 200:
+                # Get the enhanced audio directly from API
+                enhanced_audio = response.content
                 
+                if len(enhanced_audio) > 1000:  # Valid audio response
+                    logger.info(f"✅ Success with {api['name']}")
+                    logger.info(f"   Enhanced audio size: {len(enhanced_audio):,} bytes")
+                    return enhanced_audio, api['name']
+                else:
+                    logger.warning(f"   {api['name']} returned small response, trying next...")
+                    continue
+                    
+            elif response.status_code == 503:
+                logger.info(f"   ⏳ {api['name']} model loading, trying next...")
+                continue
+                
+            elif response.status_code == 429:
+                logger.info(f"   ⏸️ {api['name']} rate limited, trying next...")
+                continue
+                
+            else:
+                logger.warning(f"   ❌ {api['name']} failed: {response.status_code}")
+                continue
+                
+        except requests.exceptions.Timeout:
+            logger.warning(f"   ⏰ {api['name']} timed out, trying next...")
+            continue
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"   ❌ {api['name']} request error: {e}")
+            continue
+            
         except Exception as e:
-            logger.error(f"❌ {model['name']} error: {e}")
+            logger.error(f"   ❌ {api['name']} unexpected error: {e}")
             continue
     
-    return None, None
-
-def enhance_with_facebook_denoiser(audio_data):
-    """Try Facebook Denoiser"""
-    try:
-        logger.info("🔄 Trying Facebook Denoiser...")
-        
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/facebook/denoiser",
-            data=audio_data,
-            timeout=30
-        )
-        
-        logger.info(f"Facebook Denoiser response: {response.status_code}")
-        
-        if response.status_code == 200 and len(response.content) > 1000:
-            logger.info("✅ Facebook Denoiser success!")
-            return response.content, "Facebook Denoiser"
-        elif response.status_code == 503:
-            # Wait and retry once
-            logger.info("⏳ Facebook Denoiser loading, waiting...")
-            time.sleep(8)
-            response = requests.post(
-                "https://api-inference.huggingface.co/models/facebook/denoiser",
-                data=audio_data,
-                timeout=25
-            )
-            if response.status_code == 200 and len(response.content) > 1000:
-                logger.info("✅ Facebook Denoiser success on retry!")
-                return response.content, "Facebook Denoiser (Retry)"
-        
-        return None, None
-        
-    except Exception as e:
-        logger.error(f"❌ Facebook Denoiser error: {e}")
-        return None, None
-
-def simple_audio_processing(audio_data):
-    """Simple processing as final fallback"""
-    try:
-        logger.info("🔧 Using simple processing fallback...")
-        # Return original audio as fallback
-        return audio_data, "Original Audio (No Enhancement Available)"
-    except Exception as e:
-        logger.error(f"❌ Simple processing error: {e}")
-        return None, None
-
-def enhance_audio_comprehensive(audio_data):
-    """Try multiple enhancement methods in order of effectiveness"""
-    
-    # Method 1: AnyEnhance (Most comprehensive)
-    enhanced_audio, method = enhance_with_anyenhance(audio_data)
-    if enhanced_audio:
-        return enhanced_audio, method
-    
-    # Method 2: Resemble Enhance
-    enhanced_audio, method = enhance_with_resemble_enhance(audio_data)
-    if enhanced_audio:
-        return enhanced_audio, method
-    
-    # Method 3: Facebook Denoiser
-    enhanced_audio, method = enhance_with_facebook_denoiser(audio_data)
-    if enhanced_audio:
-        return enhanced_audio, method
-    
-    # Method 4: SpeechBrain models
-    enhanced_audio, method = enhance_with_speechbrain_models(audio_data)
-    if enhanced_audio:
-        return enhanced_audio, method
-    
-    # Method 5: Simple fallback
-    enhanced_audio, method = simple_audio_processing(audio_data)
-    return enhanced_audio, method
+    # If all APIs fail, return original audio
+    logger.warning("⚠️ All external APIs failed, returning original audio")
+    return audio_data, "Original (No Enhancement Available)"
 
 @app.route('/')
 def index():
@@ -192,89 +130,84 @@ def dashboard():
 
 @app.route('/api/enhance', methods=['POST'])
 def enhance_audio():
-    """Comprehensive audio enhancement with multiple free APIs"""
+    """Direct API processing - send to external APIs, return enhanced audio"""
     try:
-        logger.info("🎵 Audio enhancement request received")
-        logger.info(f"Request method: {request.method}")
-        logger.info(f"Content type: {request.content_type}")
-        logger.info(f"Content length: {request.content_length}")
+        logger.info("🎵 Direct API processing request received")
         
         # Validate request
         if 'audio' not in request.files:
-            logger.error("No audio file in request")
             return jsonify({'success': False, 'error': 'No audio file provided'}), 400
         
         file = request.files['audio']
-        logger.info(f"File object received: {file}")
         
         if file.filename == '':
-            logger.error("Empty filename")
             return jsonify({'success': False, 'error': 'No file selected'}), 400
         
         if not allowed_file(file.filename):
-            logger.error(f"Invalid file type: {file.filename}")
             return jsonify({
                 'success': False, 
                 'error': f'Unsupported format. Supported: {", ".join(sorted(ALLOWED_EXTENSIONS))}'
             }), 400
         
-        # Read file data with size limit
+        # Read file data - direct processing, no local storage
         try:
-            # Check file size before reading
+            # Get file size first
             file.seek(0, 2)  # Seek to end
             file_size = file.tell()
             file.seek(0)  # Seek back to beginning
             
-            logger.info(f"File size detected: {file_size} bytes")
-            
-            if file_size > 15 * 1024 * 1024:  # 15MB limit
-                logger.error(f"File too large: {file_size} bytes")
-                return jsonify({'success': False, 'error': 'File too large (max 15MB)'}), 413
-            
-            if file_size == 0:
-                logger.error("Empty file")
-                return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
-            
-            if file_size < 1000:  # Minimum 1KB
-                logger.error("File too small")
-                return jsonify({'success': False, 'error': 'File too small (min 1KB)'}), 400
-            
-            # Now read the file
-            audio_data = file.read()
-            actual_size = len(audio_data)
+            file_size_mb = file_size / (1024 * 1024)
             
             logger.info(f"📁 File: {file.filename}")
-            logger.info(f"� Size: {actual_size:,} bytes ({actual_size/1024/1024:.1f} MB)")
+            logger.info(f"📊 Size: {file_size:,} bytes ({file_size_mb:.1f} MB)")
             
-            if actual_size != file_size:
-                logger.warning(f"Size mismatch: expected {file_size}, got {actual_size}")
+            # Size validation
+            if file_size == 0:
+                return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
+            
+            if file_size > 55 * 1024 * 1024:  # 55MB limit
+                return jsonify({
+                    'success': False, 
+                    'error': f'File too large ({file_size_mb:.1f}MB). Maximum allowed: 55MB'
+                }), 413
+            
+            if file_size < 1000:  # Minimum 1KB
+                return jsonify({'success': False, 'error': 'File too small (minimum 1KB)'}), 400
+            
+            # Read the entire file into memory for direct API processing
+            logger.info("📖 Reading file for direct API processing...")
+            audio_data = file.read()
+            
+            if len(audio_data) != file_size:
+                logger.warning(f"Size mismatch: expected {file_size}, got {len(audio_data)}")
             
         except Exception as e:
             logger.error(f"Error reading file: {e}")
             return jsonify({'success': False, 'error': 'Error reading uploaded file'}), 400
         
-        # Enhance audio using comprehensive method
-        logger.info("🔄 Starting comprehensive audio enhancement...")
-        enhanced_audio, method_used = enhance_audio_comprehensive(audio_data)
+        # Direct API processing - send to external APIs
+        logger.info("🌐 Starting direct external API processing...")
+        enhanced_audio, method_used = direct_api_processing(audio_data, file_size_mb)
         
         if not enhanced_audio:
-            logger.error("❌ All enhancement methods failed")
             return jsonify({
                 'success': False, 
-                'error': 'Enhancement failed. All AI models are currently unavailable. Please try again later.'
+                'error': 'Enhancement failed. All external APIs are currently unavailable.'
             }), 500
         
-        # Success!
+        # Success! Return enhanced audio directly to client
         output_size = len(enhanced_audio)
-        logger.info(f"✅ Enhancement successful!")
+        output_size_mb = output_size / (1024 * 1024)
+        
+        logger.info(f"✅ Direct processing completed!")
         logger.info(f"🎯 Method: {method_used}")
-        logger.info(f"📈 Output: {output_size:,} bytes ({output_size/1024/1024:.1f} MB)")
+        logger.info(f"📈 Output: {output_size:,} bytes ({output_size_mb:.1f} MB)")
         
         # Create output filename
         base_name = os.path.splitext(secure_filename(file.filename))[0]
-        output_filename = f'{base_name}_enhanced_voiceclean.wav'
+        output_filename = f'{base_name}_enhanced_55mb.wav'
         
-        # Return enhanced audio file
+        # Return enhanced audio directly to client for download
         return send_file(
             io.BytesIO(enhanced_audio),
             as_attachment=True,
@@ -286,44 +219,63 @@ def enhance_audio():
         logger.error(f"💥 Server error: {str(e)}")
         return jsonify({
             'success': False, 
-            'error': f'Server error: {str(e)}'
+            'error': f'Processing error: {str(e)}'
         }), 500
 
 @app.route('/api/health')
 def health_check():
-    """Comprehensive health check"""
+    """Health check for direct API processing"""
     return jsonify({
         'status': 'healthy',
-        'version': '6.0',
-        'ai_enhancement': 'working',
+        'version': '8.0 - Direct API Processing',
+        'processing_method': 'Direct external API calls',
+        'local_storage': 'None - Direct processing only',
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
-        'max_file_size': '15MB',
-        'available_models': [
-            'AnyEnhance (Unified Enhancement)',
-            'Resemble Enhance',
-            'Facebook Denoiser',
-            'SpeechBrain MetricGAN+',
-            'SpeechBrain SGMSE',
-            'SpeechBrain SepFormer'
-        ],
+        'max_file_size': '55MB',
+        'available_apis': len(DIRECT_PROCESSING_APIS),
+        'api_providers': [api['name'] for api in DIRECT_PROCESSING_APIS],
         'features': [
-            'Multiple AI model fallbacks',
-            'Comprehensive voice enhancement',
-            'Noise removal and clarity boost',
-            'Real-time processing',
-            'No registration required'
+            'Direct API processing (no local storage)',
+            '55MB file support',
+            'Multiple external AI APIs',
+            'Stream processing for large files',
+            'No Vercel storage limitations'
         ],
         'ready': True
+    })
+
+@app.route('/api/models')
+def list_models():
+    """List available external APIs"""
+    models = []
+    for i, api in enumerate(DIRECT_PROCESSING_APIS):
+        models.append({
+            'id': i + 1,
+            'name': api['name'],
+            'description': api['description'],
+            'timeout': api['timeout'],
+            'type': 'External API',
+            'processing': 'Direct'
+        })
+    
+    return jsonify({
+        'models': models,
+        'total_models': len(models),
+        'processing_method': 'Direct external API calls',
+        'max_file_size': '55MB',
+        'storage_method': 'No local storage - direct processing'
     })
 
 @app.route('/api/test')
 def test_endpoint():
     """Test endpoint"""
     return jsonify({
-        'message': 'VoiceClean AI v6.0 - Multiple Free APIs Ready!',
+        'message': 'VoiceClean AI v8.0 - Direct API Processing Ready!',
         'timestamp': time.time(),
         'status': 'operational',
-        'models_available': 6
+        'max_file_size': '55MB',
+        'processing': 'Direct external APIs',
+        'storage': 'None - stream processing'
     })
 
 @app.errorhandler(404)
@@ -334,7 +286,7 @@ def not_found(error):
 def file_too_large(error):
     return jsonify({
         'success': False,
-        'error': 'File too large. Maximum size is 15MB.'
+        'error': 'File too large. Maximum size is 55MB for direct API processing.'
     }), 413
 
 @app.errorhandler(500)

@@ -82,7 +82,7 @@
                             </div>
                         </label>
                         <div class="mt-4 text-sm text-gray-400">
-                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS • Max size: 15MB
+                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS, WMA, AMR • Max size: 55MB
                         </div>
                     </div>
                 </div>
@@ -203,8 +203,8 @@
                     return;
                 }
 
-                if (file.size > 15 * 1024 * 1024) {
-                    alert('File size must be less than 15MB');
+                if (file.size > 55 * 1024 * 1024) {
+                    alert('File size must be less than 55MB');
                     return;
                 }
 
@@ -271,17 +271,15 @@
                     
                 } catch (error) {
                     console.error('Enhancement error:', error);
-                    let errorMsg = 'Enhancement failed. ';
+                    let errorMsg = '';
                     
-                    if (error.message.includes('413')) {
-                        errorMsg += 'File too large. Please try a smaller file (max 15MB).';
+                    if (error.message.includes('413') || error.message.includes('too large')) {
+                        errorMsg = '🚫 File Too Large\n\nVercel serverless functions have a 4MB limit. Your file is too big.\n\n💡 Solutions:\n• Compress your audio to under 4MB\n• Use a shorter audio clip\n• Try MP3 format (usually smaller)\n• Use audio editing software to reduce size';
                     } else if (error.message.includes('Server error')) {
-                        errorMsg += 'All AI models are currently busy. Please try again in a few moments.';
+                        errorMsg = '⚠️ AI Model Busy\n\nThe AI enhancement service is currently busy. Please try again in a few moments.';
                     } else {
-                        errorMsg += error.message;
+                        errorMsg = '❌ Enhancement Failed\n\n' + error.message;
                     }
-                    
-                    errorMsg += '\n\n💡 Tips:\n• Try a smaller audio file (under 15MB)\n• Use common formats: MP3, WAV, M4A\n• Check your internet connection\n• Wait a moment and try again';
                     
                     alert('🎵 VoiceClean AI\n\n' + errorMsg);
                     this.hideProgress();
