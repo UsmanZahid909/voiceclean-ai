@@ -228,8 +228,18 @@
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 
     <script>
-        // Firebase configuration from server
-        const firebaseConfig = {{ firebase_config | tojsonfilter | safe }};
+        // Firebase configuration from server environment variables
+        const firebaseConfig = {
+            "apiKey": "{{ firebase_config.apiKey }}",
+            "authDomain": "{{ firebase_config.authDomain }}",
+            "projectId": "{{ firebase_config.projectId }}",
+            "storageBucket": "{{ firebase_config.storageBucket }}",
+            "messagingSenderId": "{{ firebase_config.messagingSenderId }}",
+            "appId": "{{ firebase_config.appId }}",
+            "measurementId": "{{ firebase_config.measurementId }}"
+        };
+        
+        console.log("Firebase Config Loaded:", firebaseConfig);
         
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);

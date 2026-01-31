@@ -143,6 +143,25 @@ def test_route():
     """Simple test route to verify deployment"""
     return render_template('test.html', timestamp=datetime.now().isoformat())
 
+@app.route('/api/env-test')
+def env_test():
+    """Test endpoint to verify environment variables"""
+    return jsonify({
+        'firebase_api_key_exists': bool(os.getenv('FIREBASE_API_KEY')),
+        'firebase_api_key_preview': os.getenv('FIREBASE_API_KEY', 'NOT_SET')[:10] + '...' if os.getenv('FIREBASE_API_KEY') else 'NOT_SET',
+        'firebase_project_id': os.getenv('FIREBASE_PROJECT_ID', 'NOT_SET'),
+        'all_env_vars': {
+            'SECRET_KEY': bool(os.getenv('SECRET_KEY')),
+            'FIREBASE_API_KEY': bool(os.getenv('FIREBASE_API_KEY')),
+            'FIREBASE_AUTH_DOMAIN': bool(os.getenv('FIREBASE_AUTH_DOMAIN')),
+            'FIREBASE_PROJECT_ID': bool(os.getenv('FIREBASE_PROJECT_ID')),
+            'FIREBASE_STORAGE_BUCKET': bool(os.getenv('FIREBASE_STORAGE_BUCKET')),
+            'FIREBASE_MESSAGING_SENDER_ID': bool(os.getenv('FIREBASE_MESSAGING_SENDER_ID')),
+            'FIREBASE_APP_ID': bool(os.getenv('FIREBASE_APP_ID')),
+            'FIREBASE_MEASUREMENT_ID': bool(os.getenv('FIREBASE_MEASUREMENT_ID'))
+        }
+    })
+
 @app.route('/api/firebase-config')
 def firebase_config_endpoint():
     """Debug endpoint to check Firebase configuration"""
