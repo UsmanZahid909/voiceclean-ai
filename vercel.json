@@ -11,6 +11,26 @@
   ],
   "routes": [
     {
+      "src": "/login",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/signup", 
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/pricing",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.py"
     }
