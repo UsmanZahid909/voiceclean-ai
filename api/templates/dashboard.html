@@ -88,9 +88,31 @@
                     <span class="text-sm text-gray-400">Studio</span>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <div class="flex items-center space-x-2 text-sm">
-                        <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
-                        <span class="text-green-400">ElevenLabs Connected</span>
+                    <div id="userInfo" class="hidden flex items-center space-x-4">
+                        <div class="flex items-center space-x-2 text-sm">
+                            <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
+                            <span class="text-green-400">DeepFilterNet2 Connected</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center">
+                                <span id="userInitial" class="text-white text-sm font-semibold">U</span>
+                            </div>
+                            <div class="text-sm">
+                                <div id="userEmail" class="text-white">user@example.com</div>
+                                <div id="userPlan" class="text-gray-400">Free Plan</div>
+                            </div>
+                        </div>
+                        <button id="signOutBtn" class="text-gray-400 hover:text-white transition-colors">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="authPrompt" class="flex items-center space-x-4">
+                        <a href="/login" class="text-gray-400 hover:text-white transition-colors">Sign In</a>
+                        <a href="/signup" class="bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all">
+                            Sign Up
+                        </a>
                     </div>
                     <a href="/" class="text-gray-400 hover:text-white transition-colors">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -111,8 +133,25 @@
                     Audio Enhancement <span class="gradient-text">Studio</span>
                 </h1>
                 <p class="text-xl text-gray-300">
-                    Professional audio enhancement powered by ElevenLabs AI
+                    Professional audio enhancement powered by DeepFilterNet2 AI
                 </p>
+                
+                <!-- Usage Stats -->
+                <div id="usageStats" class="hidden mt-6 max-w-md mx-auto">
+                    <div class="glass-effect rounded-xl p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-400">Daily Usage</span>
+                            <span id="planBadge" class="text-xs bg-purple-600 px-2 py-1 rounded-full">Free Plan</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2 mb-2">
+                            <div id="usageBar" class="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span id="usageText">0 / 10 minutes used</span>
+                            <a href="/pricing" class="text-purple-400 hover:text-purple-300">Upgrade</a>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Upload Section -->
@@ -256,8 +295,138 @@
         </div>
     </main>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+
     <!-- JavaScript -->
     <script>
+        // Firebase configuration
+        const firebaseConfig = {{ firebase_config | tojsonfilter }};
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // Authentication state management
+        let currentUser = null;
+        let authToken = null;
+
+        // Check authentication on page load
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                authToken = await user.getIdToken();
+                localStorage.setItem('authToken', authToken);
+                showUserInterface(user);
+                await loadUserUsage();
+            } else {
+                // Check for stored token
+                const storedToken = localStorage.getItem('authToken');
+                if (storedToken) {
+                    try {
+                        // Verify stored token
+                        const response = await fetch('/api/auth/verify', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ idToken: storedToken })
+                        });
+                        
+                        if (response.ok) {
+                            const userData = await response.json();
+                            authToken = storedToken;
+                            showUserInterface({ email: userData.user.email });
+                            await loadUserUsage();
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('Token verification failed:', error);
+                    }
+                }
+                
+                // No valid authentication
+                showAuthPrompt();
+            }
+        });
+
+        function showUserInterface(user) {
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('authPrompt').classList.add('hidden');
+            document.getElementById('usageStats').classList.remove('hidden');
+            
+            // Update user info
+            document.getElementById('userEmail').textContent = user.email;
+            document.getElementById('userInitial').textContent = user.email.charAt(0).toUpperCase();
+        }
+
+        function showAuthPrompt() {
+            document.getElementById('userInfo').classList.add('hidden');
+            document.getElementById('authPrompt').classList.remove('hidden');
+            document.getElementById('usageStats').classList.add('hidden');
+        }
+
+        async function loadUserUsage() {
+            if (!authToken) return;
+            
+            try {
+                const response = await fetch('/api/user/usage', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateUsageDisplay(data.usage);
+                }
+            } catch (error) {
+                console.error('Failed to load usage:', error);
+            }
+        }
+
+        function updateUsageDisplay(usage) {
+            const planBadge = document.getElementById('planBadge');
+            const usageBar = document.getElementById('usageBar');
+            const usageText = document.getElementById('usageText');
+            
+            // Update plan badge
+            planBadge.textContent = usage.plan_name;
+            planBadge.className = `text-xs px-2 py-1 rounded-full ${
+                usage.plan === 'free' ? 'bg-gray-600' :
+                usage.plan === 'basic' ? 'bg-blue-600' : 'bg-purple-600'
+            }`;
+            
+            // Update usage bar
+            if (usage.is_unlimited) {
+                usageBar.style.width = '100%';
+                usageText.textContent = 'Unlimited usage';
+            } else {
+                const percentage = (usage.daily_used / usage.daily_limit) * 100;
+                usageBar.style.width = `${Math.min(percentage, 100)}%`;
+                usageText.textContent = `${usage.daily_used} / ${usage.daily_limit} minutes used`;
+                
+                // Change color if near limit
+                if (percentage > 80) {
+                    usageBar.className = 'bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full';
+                } else {
+                    usageBar.className = 'bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full';
+                }
+            }
+        }
+
+        // Sign out functionality
+        document.getElementById('signOutBtn').addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+                localStorage.removeItem('authToken');
+                window.location.href = '/';
+            } catch (error) {
+                console.error('Sign out error:', error);
+            }
+        });
+
         class VoiceCleanStudio {
             constructor() {
                 this.audioFile = null;
@@ -448,6 +617,12 @@
             }
 
             async processAudio() {
+                // Check authentication
+                if (!authToken) {
+                    this.showError('Authentication Required', 'Please sign in to enhance audio files.');
+                    return;
+                }
+
                 // Check if it's a large file that needs chunked processing
                 if (this.largeAudioFile) {
                     try {
@@ -474,6 +649,9 @@
 
                     const response = await fetch('/api/enhance', {
                         method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        },
                         body: formData
                     });
 
@@ -482,6 +660,12 @@
                         try {
                             const errorData = await response.json();
                             errorMessage = errorData.error || errorMessage;
+                            
+                            // Handle usage limit errors
+                            if (errorData.upgrade_required) {
+                                this.showUpgradePrompt(errorData.error, errorData.estimated_minutes);
+                                return;
+                            }
                         } catch (e) {
                             errorMessage = `Server error (${response.status})`;
                         }
@@ -496,6 +680,9 @@
                     
                     this.enhancedAudioUrl = URL.createObjectURL(blob);
                     this.showResult();
+                    
+                    // Refresh usage stats
+                    await loadUserUsage();
                     
                 } catch (error) {
                     console.error('Enhancement error:', error);
@@ -611,6 +798,35 @@
                 `;
                 
                 document.body.insertAdjacentHTML('beforeend', errorHtml);
+            }
+
+            showUpgradePrompt(message, estimatedMinutes) {
+                const upgradeHtml = `
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" id="upgradeModal">
+                        <div class="glass-effect rounded-2xl p-8 max-w-md mx-4">
+                            <div class="text-center">
+                                <div class="w-16 h-16 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                </div>
+                                <h3 class="text-xl font-semibold mb-2">Daily Limit Reached</h3>
+                                <p class="text-gray-300 mb-4">${message}</p>
+                                <p class="text-sm text-gray-400 mb-6">This file needs ~${estimatedMinutes} minutes to process</p>
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <a href="/pricing" class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all">
+                                        Upgrade Plan
+                                    </a>
+                                    <button onclick="document.getElementById('upgradeModal').remove()" class="glass-effect px-6 py-2 rounded-lg font-medium hover:bg-white hover:bg-opacity-10 transition-all">
+                                        Maybe Later
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', upgradeHtml);
             }
 
             formatFileSize(bytes) {

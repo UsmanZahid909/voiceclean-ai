@@ -73,8 +73,30 @@
                 <div class="hidden md:flex items-center space-x-8">
                     <a href="#features" class="text-gray-300 hover:text-white transition-colors">Features</a>
                     <a href="#how-it-works" class="text-gray-300 hover:text-white transition-colors">How it Works</a>
-                    <a href="/dashboard" class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all">
-                        Get Started
+                    <a href="/pricing" class="text-gray-300 hover:text-white transition-colors">Pricing</a>
+                    <a href="/login" class="text-gray-300 hover:text-white transition-colors">Sign In</a>
+                    <a href="/signup" class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all">
+                        Sign Up Free
+                    </a>
+                </div>
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden">
+                    <button id="mobile-menu-btn" class="text-gray-300 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Mobile Menu -->
+            <div id="mobile-menu" class="hidden md:hidden mt-4 pb-4">
+                <div class="flex flex-col space-y-4">
+                    <a href="#features" class="text-gray-300 hover:text-white transition-colors">Features</a>
+                    <a href="#how-it-works" class="text-gray-300 hover:text-white transition-colors">How it Works</a>
+                    <a href="/pricing" class="text-gray-300 hover:text-white transition-colors">Pricing</a>
+                    <a href="/login" class="text-gray-300 hover:text-white transition-colors">Sign In</a>
+                    <a href="/signup" class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all text-center">
+                        Sign Up Free
                     </a>
                 </div>
             </div>
@@ -106,18 +128,18 @@
             
             <!-- CTA Buttons -->
             <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-                <a href="/dashboard" class="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover-glow transition-all">
+                <a href="/signup" class="bg-gradient-to-r from-purple-600 to-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover-glow transition-all">
                     <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
                     </svg>
-                    Start Enhancing Audio
+                    Start Free - Sign Up Now
                 </a>
-                <button class="glass-effect px-8 py-4 rounded-xl font-medium text-gray-300 hover:text-white transition-all">
+                <a href="/login" class="glass-effect px-8 py-4 rounded-xl font-medium text-gray-300 hover:text-white transition-all">
                     <svg class="w-5 h-5 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+                        <path d="M10 2L3 7v11a2 2 0 002 2h4v-6h2v6h4a2 2 0 002-2V7l-7-5z"/>
                     </svg>
-                    Watch Demo
-                </button>
+                    Already have account? Sign In
+                </a>
             </div>
             
             <!-- Stats -->
@@ -239,8 +261,8 @@
                 <p class="text-xl text-gray-300 mb-8">
                     Transform your recordings into professional-quality audio in seconds
                 </p>
-                <a href="/dashboard" class="bg-gradient-to-r from-purple-600 to-blue-600 px-12 py-4 rounded-xl font-semibold text-lg hover-glow transition-all inline-block">
-                    Start Now - It's Free
+                <a href="/signup" class="bg-gradient-to-r from-purple-600 to-blue-600 px-12 py-4 rounded-xl font-semibold text-lg hover-glow transition-all inline-block">
+                    Start Free - Sign Up Now
                 </a>
             </div>
         </div>
@@ -264,5 +286,13 @@
             </div>
         </div>
     </footer>
+
+    <!-- Mobile Menu Script -->
+    <script>
+        document.getElementById('mobile-menu-btn').addEventListener('click', function() {
+            const mobileMenu = document.getElementById('mobile-menu');
+            mobileMenu.classList.toggle('hidden');
+        });
+    </script>
 </body>
 </html>
