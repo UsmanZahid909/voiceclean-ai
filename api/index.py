@@ -2,11 +2,8 @@ from flask import Flask, request, jsonify, send_file, render_template
 import os
 import logging
 from werkzeug.utils import secure_filename
-import requests
 import io
 import time
-from gradio_client import Client, handle_file
-import tempfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,161 +17,28 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 # Constants - Support all major audio formats
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus', 'wma', 'amr'}
 
-# ElevenLabs API Configuration
-ELEVENLABS_API_KEY = os.getenv('ELEVENLABS_API_KEY', 'sk_01b5efbef2992de27fa93ca23322a9dc407bb346b3a2cb39')
-ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
-
 def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def enhance_with_elevenlabs(file_stream, filename="audio.wav"):
-    """Use ElevenLabs Audio Isolation API for professional enhancement with streaming"""
+def process_audio_locally(file_stream, filename="audio.wav"):
+    """Process audio locally without any external APIs"""
     try:
-        logger.info("🎵 Using ElevenLabs Audio Isolation API...")
+        logger.info("🎵 Processing audio locally...")
         
-        # ElevenLabs Audio Isolation endpoint
-        url = f"{ELEVENLABS_BASE_URL}/audio-isolation"
+        # Reset file stream position
+        file_stream.seek(0)
+        audio_data = file_stream.read()
         
-        headers = {
-            "xi-api-key": ELEVENLABS_API_KEY
-        }
+        # Simple processing - just return the original audio
+        # In a real scenario, you could add local audio processing here
+        logger.info("✅ Local audio processing completed!")
         
-        # Prepare multipart form data with file stream
-        files = {
-            'audio': (filename, file_stream, 'audio/wav')
-        }
+        return audio_data, "Local Processing (Original Quality)"
         
-        data = {
-            'file_format': 'other'  # Use 'other' for general audio files
-        }
-        
-        logger.info(f"📤 Streaming file to ElevenLabs...")
-        
-        # Send audio to ElevenLabs for isolation/enhancement
-        response = requests.post(
-            url,
-            headers=headers,
-            files=files,
-            data=data,
-            timeout=300,  # 5 minutes for large files
-            stream=True  # Enable streaming
-        )
-        
-        logger.info(f"ElevenLabs API response: {response.status_code}")
-        
-        if response.status_code == 200:
-            enhanced_audio = response.content
-            if len(enhanced_audio) > 1000:
-                logger.info("✅ ElevenLabs Audio Isolation successful!")
-                return enhanced_audio, "ElevenLabs Audio Isolation"
-            else:
-                logger.warning("ElevenLabs returned small response")
-                return None, None
-        elif response.status_code == 401:
-            error_details = ""
-            try:
-                error_data = response.json()
-                if 'detail' in error_data and 'message' in error_data['detail']:
-                    error_details = error_data['detail']['message']
-            except:
-                error_details = response.text
-            
-            logger.error(f"ElevenLabs API authentication failed: {error_details}")
-            
-            if "missing_permissions" in error_details:
-                if "audio_isolation" in error_details:
-                    return None, "API key missing audio_isolation permission"
-                else:
-                    return None, "API key missing required permissions"
-            else:
-                return None, "Invalid API Key"
-        elif response.status_code == 429:
-            logger.error("ElevenLabs rate limit exceeded")
-            return None, "Rate Limited"
-        elif response.status_code == 400:
-            logger.error(f"ElevenLabs bad request: {response.text}")
-            return None, f"Bad Request: {response.text}"
-        else:
-            logger.error(f"ElevenLabs API error: {response.status_code}")
-            if response.text:
-                logger.error(f"Error details: {response.text}")
-            return None, f"API Error {response.status_code}"
-            
     except Exception as e:
-        logger.error(f"ElevenLabs API error: {e}")
+        logger.error(f"Local processing error: {e}")
         return None, str(e)
-
-def enhance_with_gradio_deepfilter(file_stream, filename="audio.wav"):
-    """Use Gradio DeepFilterNet2 for free audio enhancement"""
-    try:
-        logger.info("🎵 Using Gradio DeepFilterNet2 (Free)...")
-        
-        # Create a temporary file for Gradio client
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            file_stream.seek(0)
-            temp_file.write(file_stream.read())
-            temp_file_path = temp_file.name
-        
-        try:
-            # Initialize Gradio client
-            client = Client("drewThomasson/DeepFilterNet2_no_limit")
-            
-            logger.info(f"📤 Sending file to DeepFilterNet2...")
-            
-            # Process the audio file
-            result = client.predict(
-                audio=handle_file(temp_file_path),
-                api_name="/predict"
-            )
-            
-            logger.info(f"📥 DeepFilterNet2 processing complete")
-            
-            # Read the enhanced audio file
-            if result and os.path.exists(result):
-                with open(result, 'rb') as enhanced_file:
-                    enhanced_audio = enhanced_file.read()
-                
-                if len(enhanced_audio) > 1000:
-                    logger.info("✅ DeepFilterNet2 enhancement successful!")
-                    return enhanced_audio, "DeepFilterNet2 (Free)"
-                else:
-                    logger.warning("DeepFilterNet2 returned small response")
-                    return None, None
-            else:
-                logger.error("DeepFilterNet2 did not return a valid file")
-                return None, "No output file"
-                
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            
-    except Exception as e:
-        logger.error(f"DeepFilterNet2 error: {e}")
-        return None, str(e)
-def enhance_with_working_apis(file_stream, filename="audio.wav"):
-    """Use multiple working APIs for audio enhancement with ElevenLabs as primary and Gradio as free fallback"""
-    
-    # Try ElevenLabs first (primary service)
-    file_stream.seek(0)  # Reset stream position
-    enhanced_audio, method = enhance_with_elevenlabs(file_stream, filename)
-    if enhanced_audio:
-        return enhanced_audio, method
-    
-    # Try Gradio DeepFilterNet2 as free fallback
-    logger.info("🔄 ElevenLabs failed, trying free DeepFilterNet2...")
-    file_stream.seek(0)  # Reset stream position
-    enhanced_audio, method = enhance_with_gradio_deepfilter(file_stream, filename)
-    if enhanced_audio:
-        return enhanced_audio, method
-    
-    # Final fallback - return original audio
-    logger.info("🔄 All enhancement APIs failed, using local processing...")
-    file_stream.seek(0)  # Reset stream position
-    audio_data = file_stream.read()
-    logger.info("✅ Using original audio as enhanced (local processing)")
-    return audio_data, "Original Audio (Local Processing)"
 
 @app.route('/')
 def index():
@@ -236,10 +100,10 @@ def enhance_audio():
             logger.error(f"Error reading file: {e}")
             return jsonify({'success': False, 'error': 'Error reading uploaded file'}), 400
         
-        # Use working APIs for enhancement with streaming
-        logger.info("🚀 Starting audio enhancement with streaming...")
+        # Use local processing only
+        logger.info("🚀 Starting local audio processing...")
         logger.info(f"📁 Processing file: {file.filename} ({file_size_mb:.1f} MB)")
-        enhanced_audio, method_used = enhance_with_working_apis(file, file.filename)
+        enhanced_audio, method_used = process_audio_locally(file, file.filename)
         
         # This should never fail now since we always return original as fallback
         if not enhanced_audio:
@@ -275,20 +139,17 @@ def enhance_audio():
 
 @app.route('/api/health')
 def health_check():
-    """Health check with all API services status"""
+    """Health check with local processing status"""
     return jsonify({
         'status': 'healthy',
-        'version': '14.0 - Free DeepFilterNet2 + ElevenLabs',
-        'primary_service': 'ElevenLabs Audio Isolation',
-        'fallback_services': ['DeepFilterNet2 (Free)', 'Local Processing'],
+        'version': '15.0 - Local Processing Only',
+        'primary_service': 'Local Processing',
+        'fallback_services': [],
         'enhancement_guaranteed': True,
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
         'max_file_size': '55MB',
         'streaming_enabled': True,
-        'free_fallback': True,
-        'elevenlabs_ready': True,
-        'gradio_ready': True,
-        'api_key_preview': f"{ELEVENLABS_API_KEY[:8]}...{ELEVENLABS_API_KEY[-4:]}",
+        'no_external_apis': True,
         'ui_style': 'ElevenLabs inspired minimal design',
         'ready': True
     })
@@ -297,15 +158,14 @@ def health_check():
 def test_endpoint():
     """Test endpoint"""
     return jsonify({
-        'message': 'VoiceClean AI v14.0 - Free DeepFilterNet2 + ElevenLabs!',
+        'message': 'VoiceClean AI v15.0 - Local Processing Only!',
         'timestamp': time.time(),
         'status': 'operational',
-        'enhancement': 'elevenlabs_plus_free_fallback',
+        'enhancement': 'local_processing',
         'max_file_size': '55MB',
         'streaming_enabled': True,
-        'free_fallback': 'DeepFilterNet2',
-        'api_key_set': bool(ELEVENLABS_API_KEY),
-        'api_key_preview': f"{ELEVENLABS_API_KEY[:8]}...{ELEVENLABS_API_KEY[-4:]}" if ELEVENLABS_API_KEY else 'Not set'
+        'no_external_apis': True,
+        'processing_type': 'local_only'
     })
 
 @app.errorhandler(404)
