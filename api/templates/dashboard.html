@@ -82,7 +82,7 @@
                             </div>
                         </label>
                         <div class="mt-4 text-sm text-gray-400">
-                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS • Max size: 50MB
+                            Supported formats: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS • Max size: 25MB
                         </div>
                     </div>
                 </div>
@@ -203,8 +203,8 @@
                     return;
                 }
 
-                if (file.size > 50 * 1024 * 1024) {
-                    alert('File size must be less than 50MB');
+                if (file.size > 25 * 1024 * 1024) {
+                    alert('File size must be less than 25MB');
                     return;
                 }
 
@@ -271,7 +271,19 @@
                     
                 } catch (error) {
                     console.error('Enhancement error:', error);
-                    alert('Enhancement Error: ' + error.message + '\n\nPlease try:\n1. A smaller audio file\n2. A different audio format\n3. Check your internet connection');
+                    let errorMsg = 'Enhancement failed. ';
+                    
+                    if (error.message.includes('413')) {
+                        errorMsg += 'File too large. Please try a smaller file (max 25MB).';
+                    } else if (error.message.includes('Server error')) {
+                        errorMsg += 'All AI models are currently busy. Please try again in a few moments.';
+                    } else {
+                        errorMsg += error.message;
+                    }
+                    
+                    errorMsg += '\n\n💡 Tips:\n• Try a smaller audio file (under 25MB)\n• Use common formats: MP3, WAV, M4A\n• Check your internet connection\n• Wait a moment and try again';
+                    
+                    alert('🎵 VoiceClean AI\n\n' + errorMsg);
                     this.hideProgress();
                 }
             }
