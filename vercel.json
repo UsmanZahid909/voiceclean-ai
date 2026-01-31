@@ -31,6 +31,14 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "/debug-firebase",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/firebase-test",
+      "dest": "/api/index.py"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/index.py"
     },
