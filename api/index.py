@@ -17,7 +17,7 @@ import json
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.config['MAX_CONTENT_LENGTH'] = None  # Remove all limits
 app.config['UPLOAD_FOLDER'] = '/tmp'
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
