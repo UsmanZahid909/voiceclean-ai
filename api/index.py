@@ -87,22 +87,27 @@ def enhance_with_deepfilter(file_stream, filename="audio.wav"):
 # Main Routes
 @app.route('/')
 def index():
+    logger.info("🏠 Main page accessed")
     return render_template('index.html', firebase_config=FIREBASE_CONFIG)
 
 @app.route('/login')
 def login():
+    logger.info("🔐 Login page accessed")
     return render_template('login.html', firebase_config=FIREBASE_CONFIG)
 
 @app.route('/signup')
 def signup():
+    logger.info("📝 Signup page accessed")
     return render_template('signup.html', firebase_config=FIREBASE_CONFIG)
 
 @app.route('/pricing')
 def pricing():
+    logger.info("💰 Pricing page accessed")
     return render_template('pricing.html', plans=PLANS, firebase_config=FIREBASE_CONFIG)
 
 @app.route('/dashboard')
 def dashboard():
+    logger.info("📊 Dashboard page accessed")
     return render_template('dashboard.html', firebase_config=FIREBASE_CONFIG)
 
 # API Routes
@@ -110,10 +115,37 @@ def dashboard():
 def health_check():
     return jsonify({
         'status': 'healthy',
-        'version': 'Firebase-Complete-Working',
+        'version': 'Firebase-Complete-Working-v2',
         'firebase_project_id': FIREBASE_CONFIG['projectId'],
         'routes_working': True,
-        'ready': True
+        'ready': True,
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/test')
+def test_route():
+    """Simple test route to verify deployment"""
+    return jsonify({
+        'message': 'Test route working!',
+        'timestamp': datetime.now().isoformat(),
+        'login_signup_buttons': 'should be visible in navigation'
+    })
+
+@app.route('/api/debug')
+def debug_info():
+    """Debug endpoint to check deployment status"""
+    import os
+    return jsonify({
+        'status': 'debug',
+        'environment': 'vercel' if os.getenv('VERCEL') else 'local',
+        'routes': [
+            '/', '/login', '/signup', '/pricing', '/dashboard'
+        ],
+        'templates_available': [
+            'index.html', 'login.html', 'signup.html', 'pricing.html', 'dashboard.html'
+        ],
+        'firebase_config_loaded': bool(FIREBASE_CONFIG),
+        'timestamp': datetime.now().isoformat()
     })
 
 @app.route('/api/auth/verify', methods=['POST'])
