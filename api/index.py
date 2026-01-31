@@ -4,6 +4,8 @@ import logging
 from werkzeug.utils import secure_filename
 import io
 import time
+from gradio_client import Client, handle_file
+import tempfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,23 +23,54 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def process_audio_locally(file_stream, filename="audio.wav"):
-    """Process audio locally without any external APIs"""
+def enhance_with_deepfilter(file_stream, filename="audio.wav"):
+    """Use DeepFilterNet2 via Gradio for professional audio enhancement"""
     try:
-        logger.info("🎵 Processing audio locally...")
+        logger.info("🎵 Using DeepFilterNet2 (Free Hugging Face)...")
         
-        # Reset file stream position
-        file_stream.seek(0)
-        audio_data = file_stream.read()
+        # Create a temporary file for Gradio client
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            file_stream.seek(0)
+            temp_file.write(file_stream.read())
+            temp_file_path = temp_file.name
         
-        # Simple processing - just return the original audio
-        # In a real scenario, you could add local audio processing here
-        logger.info("✅ Local audio processing completed!")
-        
-        return audio_data, "Local Processing (Original Quality)"
-        
+        try:
+            # Initialize Gradio client
+            logger.info("🔗 Connecting to DeepFilterNet2...")
+            client = Client("drewThomasson/DeepFilterNet2_no_limit")
+            
+            logger.info(f"📤 Processing audio with DeepFilterNet2...")
+            
+            # Process the audio file
+            result = client.predict(
+                audio=handle_file(temp_file_path),
+                api_name="/predict"
+            )
+            
+            logger.info(f"📥 DeepFilterNet2 processing complete: {result}")
+            
+            # Read the enhanced audio file
+            if result and os.path.exists(result):
+                with open(result, 'rb') as enhanced_file:
+                    enhanced_audio = enhanced_file.read()
+                
+                if len(enhanced_audio) > 1000:
+                    logger.info("✅ DeepFilterNet2 enhancement successful!")
+                    return enhanced_audio, "DeepFilterNet2 Professional Enhancement"
+                else:
+                    logger.warning("DeepFilterNet2 returned small response")
+                    return None, "Small response from DeepFilterNet2"
+            else:
+                logger.error(f"DeepFilterNet2 did not return a valid file: {result}")
+                return None, "No valid output file from DeepFilterNet2"
+                
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            
     except Exception as e:
-        logger.error(f"Local processing error: {e}")
+        logger.error(f"DeepFilterNet2 error: {e}")
         return None, str(e)
 
 @app.route('/')
@@ -100,15 +133,17 @@ def enhance_audio():
             logger.error(f"Error reading file: {e}")
             return jsonify({'success': False, 'error': 'Error reading uploaded file'}), 400
         
-        # Use local processing only
-        logger.info("🚀 Starting local audio processing...")
+        # Use DeepFilterNet2 for enhancement
+        logger.info("🚀 Starting DeepFilterNet2 audio enhancement...")
         logger.info(f"📁 Processing file: {file.filename} ({file_size_mb:.1f} MB)")
-        enhanced_audio, method_used = process_audio_locally(file, file.filename)
+        enhanced_audio, method_used = enhance_with_deepfilter(file, file.filename)
         
         # This should never fail now since we always return original as fallback
         if not enhanced_audio:
-            enhanced_audio = audio_data
-            method_used = "Original (Fallback)"
+            # Fallback to original audio if DeepFilterNet2 fails
+            file.seek(0)
+            enhanced_audio = file.read()
+            method_used = "Original Audio (DeepFilterNet2 Failed)"
         
         # Success!
         output_size = len(enhanced_audio)
@@ -139,17 +174,18 @@ def enhance_audio():
 
 @app.route('/api/health')
 def health_check():
-    """Health check with local processing status"""
+    """Health check with DeepFilterNet2 status"""
     return jsonify({
         'status': 'healthy',
-        'version': '15.0 - Local Processing Only',
-        'primary_service': 'Local Processing',
-        'fallback_services': [],
+        'version': '16.0 - DeepFilterNet2 Professional Enhancement',
+        'primary_service': 'DeepFilterNet2 (Hugging Face)',
+        'fallback_services': ['Original Audio'],
         'enhancement_guaranteed': True,
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
         'max_file_size': '55MB',
         'streaming_enabled': True,
-        'no_external_apis': True,
+        'free_service': True,
+        'professional_quality': True,
         'ui_style': 'ElevenLabs inspired minimal design',
         'ready': True
     })
@@ -158,14 +194,15 @@ def health_check():
 def test_endpoint():
     """Test endpoint"""
     return jsonify({
-        'message': 'VoiceClean AI v15.0 - Local Processing Only!',
+        'message': 'VoiceClean AI v16.0 - DeepFilterNet2 Professional Enhancement!',
         'timestamp': time.time(),
         'status': 'operational',
-        'enhancement': 'local_processing',
+        'enhancement': 'deepfilternet2_professional',
         'max_file_size': '55MB',
         'streaming_enabled': True,
-        'no_external_apis': True,
-        'processing_type': 'local_only'
+        'free_service': True,
+        'processing_type': 'huggingface_gradio',
+        'model': 'drewThomasson/DeepFilterNet2_no_limit'
     })
 
 @app.errorhandler(404)
