@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB for better Vercel compatibility
+app.config['MAX_CONTENT_LENGTH'] = 15 * 1024 * 1024  # 15MB for better Vercel compatibility
 
 # Constants - Support major audio formats
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus'}
@@ -195,17 +195,24 @@ def enhance_audio():
     """Comprehensive audio enhancement with multiple free APIs"""
     try:
         logger.info("🎵 Audio enhancement request received")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Content type: {request.content_type}")
+        logger.info(f"Content length: {request.content_length}")
         
         # Validate request
         if 'audio' not in request.files:
+            logger.error("No audio file in request")
             return jsonify({'success': False, 'error': 'No audio file provided'}), 400
         
         file = request.files['audio']
+        logger.info(f"File object received: {file}")
         
         if file.filename == '':
+            logger.error("Empty filename")
             return jsonify({'success': False, 'error': 'No file selected'}), 400
         
         if not allowed_file(file.filename):
+            logger.error(f"Invalid file type: {file.filename}")
             return jsonify({
                 'success': False, 
                 'error': f'Unsupported format. Supported: {", ".join(sorted(ALLOWED_EXTENSIONS))}'
@@ -213,24 +220,38 @@ def enhance_audio():
         
         # Read file data with size limit
         try:
+            # Check file size before reading
+            file.seek(0, 2)  # Seek to end
+            file_size = file.tell()
+            file.seek(0)  # Seek back to beginning
+            
+            logger.info(f"File size detected: {file_size} bytes")
+            
+            if file_size > 15 * 1024 * 1024:  # 15MB limit
+                logger.error(f"File too large: {file_size} bytes")
+                return jsonify({'success': False, 'error': 'File too large (max 15MB)'}), 413
+            
+            if file_size == 0:
+                logger.error("Empty file")
+                return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
+            
+            if file_size < 1000:  # Minimum 1KB
+                logger.error("File too small")
+                return jsonify({'success': False, 'error': 'File too small (min 1KB)'}), 400
+            
+            # Now read the file
             audio_data = file.read()
-            file_size = len(audio_data)
+            actual_size = len(audio_data)
+            
+            logger.info(f"📁 File: {file.filename}")
+            logger.info(f"� Size: {actual_size:,} bytes ({actual_size/1024/1024:.1f} MB)")
+            
+            if actual_size != file_size:
+                logger.warning(f"Size mismatch: expected {file_size}, got {actual_size}")
+            
         except Exception as e:
             logger.error(f"Error reading file: {e}")
             return jsonify({'success': False, 'error': 'Error reading uploaded file'}), 400
-        
-        logger.info(f"📁 File: {file.filename}")
-        logger.info(f"📊 Size: {file_size:,} bytes ({file_size/1024/1024:.1f} MB)")
-        
-        # Size validation
-        if file_size == 0:
-            return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
-        
-        if file_size > 25 * 1024 * 1024:  # 25MB limit
-            return jsonify({'success': False, 'error': 'File too large (max 25MB)'}), 413
-        
-        if file_size < 1000:  # Minimum 1KB
-            return jsonify({'success': False, 'error': 'File too small (min 1KB)'}), 400
         
         # Enhance audio using comprehensive method
         logger.info("🔄 Starting comprehensive audio enhancement...")
@@ -276,7 +297,7 @@ def health_check():
         'version': '6.0',
         'ai_enhancement': 'working',
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
-        'max_file_size': '25MB',
+        'max_file_size': '15MB',
         'available_models': [
             'AnyEnhance (Unified Enhancement)',
             'Resemble Enhance',
@@ -313,7 +334,7 @@ def not_found(error):
 def file_too_large(error):
     return jsonify({
         'success': False,
-        'error': 'File too large. Maximum size is 25MB.'
+        'error': 'File too large. Maximum size is 15MB.'
     }), 413
 
 @app.errorhandler(500)
