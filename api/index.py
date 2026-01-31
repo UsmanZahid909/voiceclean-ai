@@ -143,6 +143,47 @@ def test_route():
     """Simple test route to verify deployment"""
     return render_template('test.html', timestamp=datetime.now().isoformat())
 
+@app.route('/firebase-test')
+def firebase_test():
+    """Firebase authentication test page"""
+    return render_template('firebase-test.html')
+
+@app.route('/debug-firebase')
+def debug_firebase():
+    """Simple debug route to check Firebase config"""
+    return f"""
+    <html>
+    <head><title>Firebase Debug</title></head>
+    <body>
+        <h1>Firebase Configuration Debug</h1>
+        <h2>Environment Variables:</h2>
+        <p>FIREBASE_API_KEY: {os.getenv('FIREBASE_API_KEY', 'NOT_SET')[:10]}...</p>
+        <p>FIREBASE_PROJECT_ID: {os.getenv('FIREBASE_PROJECT_ID', 'NOT_SET')}</p>
+        <p>FIREBASE_AUTH_DOMAIN: {os.getenv('FIREBASE_AUTH_DOMAIN', 'NOT_SET')}</p>
+        
+        <h2>Current Firebase Config:</h2>
+        <pre>{json.dumps(FIREBASE_CONFIG, indent=2)}</pre>
+        
+        <h2>Test Firebase in Browser:</h2>
+        <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+        <script>
+            const firebaseConfig = {json.dumps(FIREBASE_CONFIG)};
+            console.log("Firebase Config:", firebaseConfig);
+            
+            try {{
+                firebase.initializeApp(firebaseConfig);
+                document.write("<p style='color: green;'>✅ Firebase initialized successfully!</p>");
+                console.log("Firebase initialized successfully");
+            }} catch (error) {{
+                document.write("<p style='color: red;'>❌ Firebase initialization failed: " + error.message + "</p>");
+                console.error("Firebase initialization failed:", error);
+            }}
+        </script>
+    </body>
+    </html>
+    """
+
 @app.route('/api/env-test')
 def env_test():
     """Test endpoint to verify environment variables"""

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Authentication Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: white; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .test-section { background: #333; padding: 20px; margin: 20px 0; border-radius: 10px; }
+        button { background: #6366f1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px 5px; }
+        button:hover { background: #5855eb; }
+        .result { background: #444; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        input { padding: 10px; margin: 5px; border: 1px solid #666; border-radius: 5px; background: #555; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Firebase Authentication Test</h1>
+        
+        <div class="test-section">
+            <h2>Firebase Configuration</h2>
+            <div id="configDisplay"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Email/Password Sign Up Test</h2>
+            <input type="email" id="testEmail" placeholder="test@example.com" value="test@voiceclean.ai">
+            <input type="password" id="testPassword" placeholder="password123" value="password123">
+            <br>
+            <button onclick="testSignUp()">Test Sign Up</button>
+            <button onclick="testSignIn()">Test Sign In</button>
+            <div id="authResult" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Google Sign In Test</h2>
+            <button onclick="testGoogleSignIn()">Test Google Sign In</button>
+            <div id="googleResult" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Debug Information</h2>
+            <div id="debugInfo" class="result"></div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+
+    <script>
+        // Firebase configuration - LATEST CORRECT CONFIG
+        const firebaseConfig = {
+            "apiKey": "AIzaSyAB3EfEbhUDMB4ZYk6pFTQ6Vl6EC1Sa2fI",
+            "authDomain": "avian-mystery-433509-u5.firebaseapp.com",
+            "projectId": "avian-mystery-433509-u5",
+            "storageBucket": "avian-mystery-433509-u5.firebasestorage.app",
+            "messagingSenderId": "454829723768",
+            "appId": "1:454829723768:web:8bce5f5ecd1bc5f0499d8d",
+            "measurementId": "G-1RCP94S156"
+        };
+        
+        // Display configuration
+        document.getElementById('configDisplay').innerHTML = `
+            <pre>${JSON.stringify(firebaseConfig, null, 2)}</pre>
+        `;
+        
+        // Initialize Firebase
+        let auth;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            document.getElementById('debugInfo').innerHTML = '<span class="success">✅ Firebase initialized successfully!</span>';
+            console.log("Firebase initialized successfully");
+        } catch (error) {
+            document.getElementById('debugInfo').innerHTML = `<span class="error">❌ Firebase initialization failed: ${error.message}</span>`;
+            console.error("Firebase initialization failed:", error);
+        }
+        
+        async function testSignUp() {
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            const resultDiv = document.getElementById('authResult');
+            
+            try {
+                resultDiv.innerHTML = '🔄 Testing sign up...';
+                const result = await auth.createUserWithEmailAndPassword(email, password);
+                resultDiv.innerHTML = `<span class="success">✅ Sign up successful! User: ${result.user.email}</span>`;
+                console.log('Sign up successful:', result);
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Sign up failed: ${error.code} - ${error.message}</span>`;
+                console.error('Sign up failed:', error);
+            }
+        }
+        
+        async function testSignIn() {
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            const resultDiv = document.getElementById('authResult');
+            
+            try {
+                resultDiv.innerHTML = '🔄 Testing sign in...';
+                const result = await auth.signInWithEmailAndPassword(email, password);
+                resultDiv.innerHTML = `<span class="success">✅ Sign in successful! User: ${result.user.email}</span>`;
+                console.log('Sign in successful:', result);
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Sign in failed: ${error.code} - ${error.message}</span>`;
+                console.error('Sign in failed:', error);
+            }
+        }
+        
+        async function testGoogleSignIn() {
+            const resultDiv = document.getElementById('googleResult');
+            
+            try {
+                resultDiv.innerHTML = '🔄 Testing Google sign in...';
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await auth.signInWithPopup(provider);
+                resultDiv.innerHTML = `<span class="success">✅ Google sign in successful! User: ${result.user.email}</span>`;
+                console.log('Google sign in successful:', result);
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Google sign in failed: ${error.code} - ${error.message}</span>`;
+                console.error('Google sign in failed:', error);
+            }
+        }
+    </script>
+</body>
+</html>
