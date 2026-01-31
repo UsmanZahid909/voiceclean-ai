@@ -4,10 +4,10 @@ import time
 import logging
 import io
 import tempfile
+import json
 from werkzeug.utils import secure_filename
 from gradio_client import Client
 from datetime import datetime
-import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,6 +17,11 @@ app = Flask(__name__, template_folder='templates')
 app.config['MAX_CONTENT_LENGTH'] = None
 app.config['UPLOAD_FOLDER'] = '/tmp'
 app.secret_key = os.getenv('SECRET_KEY', 'voiceclean-ai-secret-key-2024')
+
+# Add JSON filter for templates
+@app.template_filter('tojsonfilter')
+def to_json_filter(obj):
+    return json.dumps(obj)
 
 # Firebase Configuration - Using Environment Variables
 FIREBASE_CONFIG = {
@@ -137,6 +142,23 @@ def health_check():
 def test_route():
     """Simple test route to verify deployment"""
     return render_template('test.html', timestamp=datetime.now().isoformat())
+
+@app.route('/api/firebase-config')
+def firebase_config_endpoint():
+    """Debug endpoint to check Firebase configuration"""
+    return jsonify({
+        'firebase_config': FIREBASE_CONFIG,
+        'firebase_enabled': FIREBASE_ENABLED,
+        'environment_variables_loaded': {
+            'FIREBASE_API_KEY': bool(os.getenv('FIREBASE_API_KEY')),
+            'FIREBASE_AUTH_DOMAIN': bool(os.getenv('FIREBASE_AUTH_DOMAIN')),
+            'FIREBASE_PROJECT_ID': bool(os.getenv('FIREBASE_PROJECT_ID')),
+            'FIREBASE_STORAGE_BUCKET': bool(os.getenv('FIREBASE_STORAGE_BUCKET')),
+            'FIREBASE_MESSAGING_SENDER_ID': bool(os.getenv('FIREBASE_MESSAGING_SENDER_ID')),
+            'FIREBASE_APP_ID': bool(os.getenv('FIREBASE_APP_ID')),
+            'FIREBASE_MEASUREMENT_ID': bool(os.getenv('FIREBASE_MEASUREMENT_ID'))
+        }
+    })
 
 @app.route('/api/debug')
 def debug_info():
