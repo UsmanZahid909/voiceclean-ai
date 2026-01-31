@@ -93,26 +93,45 @@ def enhance_with_deepfilter(file_stream, filename="audio.wav"):
             except Exception as e:
                 logger.warning(f"Failed to clean temp file: {e}")
 
-# Routes
 @app.route('/')
 def index():
-    return render_template('index.html', firebase_config=FIREBASE_CONFIG, stripe_key=STRIPE_PUBLISHABLE_KEY)
+    try:
+        return render_template('index.html', firebase_config=FIREBASE_CONFIG, stripe_key=STRIPE_PUBLISHABLE_KEY)
+    except Exception as e:
+        logger.error(f"Index error: {e}")
+        return f"VoiceClean AI - Firebase Ready! Error: {e}", 200
 
 @app.route('/login')
 def login():
-    return render_template('login.html', firebase_config=FIREBASE_CONFIG)
+    try:
+        return render_template('login.html', firebase_config=FIREBASE_CONFIG)
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        return f"Login Page - Firebase Ready! Error: {e}", 200
 
 @app.route('/signup')
 def signup():
-    return render_template('signup.html', firebase_config=FIREBASE_CONFIG)
+    try:
+        return render_template('signup.html', firebase_config=FIREBASE_CONFIG)
+    except Exception as e:
+        logger.error(f"Signup error: {e}")
+        return f"Signup Page - Firebase Ready! Error: {e}", 200
 
 @app.route('/pricing')
 def pricing():
-    return render_template('pricing.html', plans=PLANS, stripe_key=STRIPE_PUBLISHABLE_KEY)
+    try:
+        return render_template('pricing.html', plans=PLANS, stripe_key=STRIPE_PUBLISHABLE_KEY)
+    except Exception as e:
+        logger.error(f"Pricing error: {e}")
+        return f"Pricing Page - Firebase Ready! Error: {e}", 200
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard.html', firebase_config=FIREBASE_CONFIG, stripe_key=STRIPE_PUBLISHABLE_KEY)
+    try:
+        return render_template('dashboard.html', firebase_config=FIREBASE_CONFIG, stripe_key=STRIPE_PUBLISHABLE_KEY)
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        return f"Dashboard - Firebase Ready! Error: {e}", 200
 
 # API Routes
 @app.route('/api/health')
