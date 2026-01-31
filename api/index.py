@@ -25,14 +25,14 @@ def to_json_filter(obj):
 
 # Firebase Configuration - Using Environment Variables
 FIREBASE_CONFIG = {
-    "apiKey": os.getenv('FIREBASE_API_KEY', 'AIzaSyF29QM3C0pri4z5say9nu4a'),
-    "authDomain": os.getenv('FIREBASE_AUTH_DOMAIN', 'voiceclean-ai-say9nu4a.firebaseapp.com'),
-    "projectId": os.getenv('FIREBASE_PROJECT_ID', 'voiceclean-ai-say9nu4a'),
-    "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', 'voiceclean-ai-say9nu4a.appspot.com'),
+    "apiKey": os.getenv('FIREBASE_API_KEY', 'AIzaSyAB3EfEbhUDMB4ZYk6pFTQ6Vl6EC1Sa2fI'),
+    "authDomain": os.getenv('FIREBASE_AUTH_DOMAIN', 'avian-mystery-433509-u5.firebaseapp.com'),
+    "projectId": os.getenv('FIREBASE_PROJECT_ID', 'avian-mystery-433509-u5'),
+    "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', 'avian-mystery-433509-u5.firebasestorage.app'),
     "messagingSenderId": os.getenv('FIREBASE_MESSAGING_SENDER_ID', '454829723768'),
     "appId": os.getenv('FIREBASE_APP_ID', '1:454829723768:web:ec36f24d8df4f882499d8d'),
     "measurementId": os.getenv('FIREBASE_MEASUREMENT_ID', 'G-G35LS3E4P7'),
-    "databaseURL": os.getenv('FIREBASE_DATABASE_URL', 'https://voiceclean-ai-say9nu4a-default-rtdb.firebaseio.com/')
+    "databaseURL": os.getenv('FIREBASE_DATABASE_URL', 'https://avian-mystery-433509-u5-default-rtdb.firebaseio.com/')
 }
 
 # Additional Firebase Configuration

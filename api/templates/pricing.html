@@ -228,18 +228,18 @@
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 
     <script>
-        // Firebase configuration from server environment variables
+        // Firebase configuration - CORRECT API KEY
         const firebaseConfig = {
-            "apiKey": "{{ firebase_config.apiKey }}",
-            "authDomain": "{{ firebase_config.authDomain }}",
-            "projectId": "{{ firebase_config.projectId }}",
-            "storageBucket": "{{ firebase_config.storageBucket }}",
-            "messagingSenderId": "{{ firebase_config.messagingSenderId }}",
-            "appId": "{{ firebase_config.appId }}",
-            "measurementId": "{{ firebase_config.measurementId }}"
+            "apiKey": "AIzaSyAB3EfEbhUDMB4ZYk6pFTQ6Vl6EC1Sa2fI",
+            "authDomain": "avian-mystery-433509-u5.firebaseapp.com",
+            "projectId": "avian-mystery-433509-u5",
+            "storageBucket": "avian-mystery-433509-u5.firebasestorage.app",
+            "messagingSenderId": "454829723768",
+            "appId": "1:454829723768:web:ec36f24d8df4f882499d8d",
+            "measurementId": "G-G35LS3E4P7"
         };
         
-        console.log("Firebase Config Loaded:", firebaseConfig);
+        console.log("Firebase Config Loaded (CORRECT API KEY):", firebaseConfig);
         
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
