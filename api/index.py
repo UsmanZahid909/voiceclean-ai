@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_file, render_template, session
 import os
 import logging
 from werkzeug.utils import secure_filename
@@ -6,6 +6,12 @@ import io
 import time
 from gradio_client import Client, handle_file
 import tempfile
+import firebase_admin
+from firebase_admin import credentials, firestore, auth
+import pyrebase
+import stripe
+from datetime import datetime, timedelta
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,6 +21,77 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = None  # Remove all limits
 app.config['UPLOAD_FOLDER'] = '/tmp'
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.secret_key = os.getenv('SECRET_KEY', 'voiceclean-ai-secret-key-2024')
+
+# Firebase Configuration
+FIREBASE_CONFIG = {
+    "apiKey": os.getenv('FIREBASE_API_KEY', 'AIzaSyBvOyiDXe5jhGtgYzPQSNmEeKmEeKmEeKm'),
+    "authDomain": os.getenv('FIREBASE_AUTH_DOMAIN', 'voiceclean-ai.firebaseapp.com'),
+    "projectId": os.getenv('FIREBASE_PROJECT_ID', 'voiceclean-ai'),
+    "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', 'voiceclean-ai.appspot.com'),
+    "messagingSenderId": os.getenv('FIREBASE_MESSAGING_SENDER_ID', '123456789'),
+    "appId": os.getenv('FIREBASE_APP_ID', '1:123456789:web:abcdef123456'),
+    "databaseURL": os.getenv('FIREBASE_DATABASE_URL', 'https://voiceclean-ai-default-rtdb.firebaseio.com/')
+}
+
+# Stripe Configuration
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY', 'sk_test_...')
+STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', 'pk_test_...')
+
+# Initialize Firebase
+try:
+    # Initialize Firebase Admin (for server-side operations)
+    if not firebase_admin._apps:
+        # Create service account key from environment variables
+        service_account_info = {
+            "type": "service_account",
+            "project_id": FIREBASE_CONFIG["projectId"],
+            "private_key_id": os.getenv('FIREBASE_PRIVATE_KEY_ID', ''),
+            "private_key": os.getenv('FIREBASE_PRIVATE_KEY', '').replace('\\n', '\n'),
+            "client_email": os.getenv('FIREBASE_CLIENT_EMAIL', ''),
+            "client_id": os.getenv('FIREBASE_CLIENT_ID', ''),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+        
+        cred = credentials.Certificate(service_account_info)
+        firebase_admin.initialize_app(cred)
+    
+    # Initialize Firestore
+    db = firestore.client()
+    
+    # Initialize Pyrebase (for client-side auth)
+    firebase = pyrebase.initialize_app(FIREBASE_CONFIG)
+    firebase_auth = firebase.auth()
+    
+    logger.info("✅ Firebase initialized successfully")
+    
+except Exception as e:
+    logger.error(f"❌ Firebase initialization failed: {e}")
+    db = None
+    firebase_auth = None
+
+# Subscription Plans
+PLANS = {
+    'free': {
+        'name': 'Free Plan',
+        'daily_minutes': 10,
+        'price': 0,
+        'stripe_price_id': None
+    },
+    'basic': {
+        'name': 'Basic Plan',
+        'daily_minutes': 60,
+        'price': 1.00,
+        'stripe_price_id': os.getenv('STRIPE_BASIC_PRICE_ID', 'price_basic_monthly')
+    },
+    'unlimited': {
+        'name': 'Unlimited Plan',
+        'daily_minutes': -1,  # -1 means unlimited
+        'price': 2.00,
+        'stripe_price_id': os.getenv('STRIPE_UNLIMITED_PRICE_ID', 'price_unlimited_monthly')
+    }
+}
 
 # Constants - Support all major audio formats
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus', 'wma', 'amr'}
@@ -22,6 +99,101 @@ ALLOWED_EXTENSIONS = {'mp3', 'wav', 'm4a', 'flac', 'ogg', 'aac', 'webm', 'opus',
 def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# User Management Functions
+def get_user_data(user_id):
+    """Get user data from Firestore"""
+    if not db:
+        return None
+    
+    try:
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        
+        if user_doc.exists:
+            return user_doc.to_dict()
+        else:
+            # Create new user with free plan
+            user_data = {
+                'email': '',
+                'plan': 'free',
+                'daily_minutes_used': 0,
+                'last_reset_date': datetime.now().strftime('%Y-%m-%d'),
+                'created_at': datetime.now(),
+                'stripe_customer_id': None,
+                'subscription_status': 'active'
+            }
+            user_ref.set(user_data)
+            return user_data
+    except Exception as e:
+        logger.error(f"Error getting user data: {e}")
+        return None
+
+def update_user_usage(user_id, minutes_used):
+    """Update user's daily usage"""
+    if not db:
+        return False
+    
+    try:
+        user_ref = db.collection('users').document(user_id)
+        user_data = get_user_data(user_id)
+        
+        if not user_data:
+            return False
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # Reset daily usage if it's a new day
+        if user_data.get('last_reset_date') != today:
+            user_data['daily_minutes_used'] = 0
+            user_data['last_reset_date'] = today
+        
+        # Add new usage
+        user_data['daily_minutes_used'] += minutes_used
+        
+        user_ref.update({
+            'daily_minutes_used': user_data['daily_minutes_used'],
+            'last_reset_date': today
+        })
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error updating user usage: {e}")
+        return False
+
+def check_user_limits(user_id, estimated_minutes):
+    """Check if user can process audio based on their plan"""
+    user_data = get_user_data(user_id)
+    if not user_data:
+        return False, "User data not found"
+    
+    plan = PLANS.get(user_data.get('plan', 'free'))
+    if not plan:
+        return False, "Invalid plan"
+    
+    # Unlimited plan
+    if plan['daily_minutes'] == -1:
+        return True, "Unlimited plan"
+    
+    today = datetime.now().strftime('%Y-%m-%d')
+    daily_used = user_data.get('daily_minutes_used', 0)
+    
+    # Reset if new day
+    if user_data.get('last_reset_date') != today:
+        daily_used = 0
+    
+    remaining = plan['daily_minutes'] - daily_used
+    
+    if estimated_minutes > remaining:
+        return False, f"Daily limit exceeded. Used: {daily_used}/{plan['daily_minutes']} minutes. Upgrade your plan for more usage."
+    
+    return True, f"Usage allowed. Remaining: {remaining - estimated_minutes} minutes today"
+
+def estimate_audio_duration(file_size):
+    """Estimate audio duration in minutes based on file size"""
+    # Rough estimation: 1MB ≈ 1 minute for compressed audio
+    estimated_minutes = max(1, file_size / (1024 * 1024))
+    return round(estimated_minutes, 1)
 
 def enhance_with_deepfilter(file_stream, filename="audio.wav"):
     """Use DeepFilterNet2 via Gradio - OPTIMIZED for large files"""
@@ -103,7 +275,74 @@ def enhance_with_deepfilter(file_stream, filename="audio.wav"):
             except Exception as e:
                 logger.warning(f"Failed to clean temp file: {e}")
 
-# Add chunked upload support
+# Stripe Subscription Routes
+@app.route('/api/create-checkout-session', methods=['POST'])
+def create_checkout_session():
+    """Create Stripe checkout session for subscription"""
+    try:
+        data = request.get_json()
+        plan_id = data.get('plan')
+        user_id = data.get('userId')
+        
+        if plan_id not in PLANS or plan_id == 'free':
+            return jsonify({'success': False, 'error': 'Invalid plan'}), 400
+        
+        plan = PLANS[plan_id]
+        
+        # Create Stripe checkout session
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price': plan['stripe_price_id'],
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=request.host_url + 'dashboard?success=true',
+            cancel_url=request.host_url + 'pricing?canceled=true',
+            client_reference_id=user_id,
+            metadata={
+                'user_id': user_id,
+                'plan': plan_id
+            }
+        )
+        
+        return jsonify({'success': True, 'checkout_url': session.url})
+        
+    except Exception as e:
+        logger.error(f"Checkout session error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create checkout session'}), 500
+
+@app.route('/api/webhook/stripe', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhooks"""
+    payload = request.get_data()
+    sig_header = request.headers.get('Stripe-Signature')
+    endpoint_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except ValueError:
+        return jsonify({'error': 'Invalid payload'}), 400
+    except stripe.error.SignatureVerificationError:
+        return jsonify({'error': 'Invalid signature'}), 400
+    
+    # Handle successful subscription
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        user_id = session.get('client_reference_id')
+        plan = session['metadata'].get('plan')
+        
+        if user_id and plan and db:
+            # Update user's plan
+            db.collection('users').document(user_id).update({
+                'plan': plan,
+                'subscription_status': 'active',
+                'stripe_customer_id': session.get('customer'),
+                'updated_at': datetime.now()
+            })
+            logger.info(f"User {user_id} upgraded to {plan}")
+    
+    return jsonify({'success': True})
 @app.route('/api/upload-chunk', methods=['POST'])
 def upload_chunk():
     """Handle chunked file uploads to bypass Vercel's 4.5MB limit"""
@@ -218,17 +457,120 @@ def enhance_chunked_audio():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', firebase_config=FIREBASE_CONFIG, stripe_key=STRIPE_PUBLISHABLE_KEY)
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard.html')
+    return render_template('dashboard.html', firebase_config=FIREBASE_CONFIG, stripe_key=STRIPE_PUBLISHABLE_KEY)
+
+@app.route('/login')
+def login():
+    return render_template('login.html', firebase_config=FIREBASE_CONFIG)
+
+@app.route('/signup')
+def signup():
+    return render_template('signup.html', firebase_config=FIREBASE_CONFIG)
+
+@app.route('/pricing')
+def pricing():
+    return render_template('pricing.html', plans=PLANS, stripe_key=STRIPE_PUBLISHABLE_KEY)
+
+# Authentication API Routes
+@app.route('/api/auth/verify', methods=['POST'])
+def verify_token():
+    """Verify Firebase ID token"""
+    try:
+        data = request.get_json()
+        id_token = data.get('idToken')
+        
+        if not id_token:
+            return jsonify({'success': False, 'error': 'No token provided'}), 400
+        
+        # Verify the token
+        decoded_token = auth.verify_id_token(id_token)
+        user_id = decoded_token['uid']
+        email = decoded_token.get('email', '')
+        
+        # Get or create user data
+        user_data = get_user_data(user_id)
+        if user_data and not user_data.get('email'):
+            # Update email if not set
+            db.collection('users').document(user_id).update({'email': email})
+            user_data['email'] = email
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'uid': user_id,
+                'email': email,
+                'plan': user_data.get('plan', 'free'),
+                'daily_minutes_used': user_data.get('daily_minutes_used', 0),
+                'daily_limit': PLANS[user_data.get('plan', 'free')]['daily_minutes']
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Token verification error: {e}")
+        return jsonify({'success': False, 'error': 'Invalid token'}), 401
+
+@app.route('/api/user/usage')
+def get_user_usage():
+    """Get current user's usage statistics"""
+    try:
+        # Get user ID from session or token
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'success': False, 'error': 'No authorization token'}), 401
+        
+        id_token = auth_header.split('Bearer ')[1]
+        decoded_token = auth.verify_id_token(id_token)
+        user_id = decoded_token['uid']
+        
+        user_data = get_user_data(user_id)
+        if not user_data:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        plan = PLANS[user_data.get('plan', 'free')]
+        today = datetime.now().strftime('%Y-%m-%d')
+        daily_used = user_data.get('daily_minutes_used', 0)
+        
+        # Reset if new day
+        if user_data.get('last_reset_date') != today:
+            daily_used = 0
+        
+        return jsonify({
+            'success': True,
+            'usage': {
+                'plan': user_data.get('plan', 'free'),
+                'plan_name': plan['name'],
+                'daily_used': daily_used,
+                'daily_limit': plan['daily_minutes'],
+                'remaining': plan['daily_minutes'] - daily_used if plan['daily_minutes'] != -1 else -1,
+                'is_unlimited': plan['daily_minutes'] == -1
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Usage check error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to get usage'}), 500
 
 @app.route('/api/enhance', methods=['POST'])
 def enhance_audio():
-    """Professional audio enhancement with guaranteed working fallbacks"""
+    """Professional audio enhancement with user authentication and limits"""
     try:
         logger.info("🎵 Audio enhancement request received")
+        
+        # Check authentication
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'success': False, 'error': 'Authentication required'}), 401
+        
+        try:
+            id_token = auth_header.split('Bearer ')[1]
+            decoded_token = auth.verify_id_token(id_token)
+            user_id = decoded_token['uid']
+        except Exception as e:
+            return jsonify({'success': False, 'error': 'Invalid authentication token'}), 401
         
         # Validate request
         if 'audio' not in request.files:
@@ -275,6 +617,18 @@ def enhance_audio():
             if file_size < 1000:  # Minimum 1KB
                 return jsonify({'success': False, 'error': 'File too small (minimum 1KB)'}), 400
             
+            # Check user limits
+            estimated_minutes = estimate_audio_duration(file_size)
+            can_process, limit_message = check_user_limits(user_id, estimated_minutes)
+            
+            if not can_process:
+                return jsonify({
+                    'success': False, 
+                    'error': limit_message,
+                    'upgrade_required': True,
+                    'estimated_minutes': estimated_minutes
+                }), 429
+            
             # Reset file pointer for processing
             file.seek(0)
             
@@ -283,7 +637,7 @@ def enhance_audio():
             return jsonify({'success': False, 'error': 'Error reading uploaded file'}), 400
         
         # Use DeepFilterNet2 for enhancement - OPTIMIZED
-        logger.info("🚀 Starting DeepFilterNet2 Professional Enhancement...")
+        logger.info("� Starting DeepFilterNet2 Professional Enhancement...")
         logger.info(f"📁 Processing: {file.filename} ({file_size_mb:.1f} MB)")
         
         start_time = time.time()
@@ -300,6 +654,9 @@ def enhance_audio():
             enhanced_audio = file.read()
             method_used = f"Original Audio (DeepFilterNet2 failed: {method_used})"
             logger.info("🔄 Using original audio as fallback")
+        
+        # Update user usage
+        update_user_usage(user_id, estimated_minutes)
         
         # Success!
         output_size = len(enhanced_audio)
