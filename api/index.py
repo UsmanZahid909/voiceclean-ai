@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB for DeepFilterNet2
+app.config['MAX_CONTENT_LENGTH'] = None  # Remove all limits
 app.config['UPLOAD_FOLDER'] = '/tmp'
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
@@ -103,6 +103,119 @@ def enhance_with_deepfilter(file_stream, filename="audio.wav"):
             except Exception as e:
                 logger.warning(f"Failed to clean temp file: {e}")
 
+# Add chunked upload support
+@app.route('/api/upload-chunk', methods=['POST'])
+def upload_chunk():
+    """Handle chunked file uploads to bypass Vercel's 4.5MB limit"""
+    try:
+        chunk = request.files.get('chunk')
+        chunk_index = int(request.form.get('chunkIndex', 0))
+        total_chunks = int(request.form.get('totalChunks', 1))
+        filename = request.form.get('filename', 'audio.wav')
+        upload_id = request.form.get('uploadId')
+        
+        if not chunk or not upload_id:
+            return jsonify({'success': False, 'error': 'Missing chunk or upload ID'}), 400
+        
+        # Create upload directory
+        upload_dir = f'/tmp/uploads/{upload_id}'
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save chunk
+        chunk_path = f'{upload_dir}/chunk_{chunk_index}'
+        chunk.save(chunk_path)
+        
+        logger.info(f"📦 Chunk {chunk_index + 1}/{total_chunks} saved")
+        
+        # Check if all chunks are uploaded
+        uploaded_chunks = len([f for f in os.listdir(upload_dir) if f.startswith('chunk_')])
+        
+        if uploaded_chunks == total_chunks:
+            # Combine all chunks
+            combined_path = f'{upload_dir}/combined_{filename}'
+            with open(combined_path, 'wb') as combined_file:
+                for i in range(total_chunks):
+                    chunk_path = f'{upload_dir}/chunk_{i}'
+                    if os.path.exists(chunk_path):
+                        with open(chunk_path, 'rb') as chunk_file:
+                            combined_file.write(chunk_file.read())
+                        os.remove(chunk_path)  # Clean up chunk
+            
+            file_size = os.path.getsize(combined_path)
+            logger.info(f"✅ File combined: {filename} ({file_size} bytes)")
+            
+            return jsonify({
+                'success': True,
+                'message': 'File upload complete',
+                'uploadId': upload_id,
+                'filename': filename,
+                'size': file_size,
+                'ready_for_processing': True
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': f'Chunk {chunk_index + 1}/{total_chunks} uploaded',
+                'uploadId': upload_id,
+                'chunks_received': uploaded_chunks,
+                'total_chunks': total_chunks
+            })
+            
+    except Exception as e:
+        logger.error(f"Chunk upload error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/enhance-chunked', methods=['POST'])
+def enhance_chunked_audio():
+    """Process audio that was uploaded in chunks"""
+    try:
+        data = request.get_json()
+        upload_id = data.get('uploadId')
+        filename = data.get('filename', 'audio.wav')
+        
+        if not upload_id:
+            return jsonify({'success': False, 'error': 'Missing upload ID'}), 400
+        
+        # Find the combined file
+        upload_dir = f'/tmp/uploads/{upload_id}'
+        combined_path = f'{upload_dir}/combined_{filename}'
+        
+        if not os.path.exists(combined_path):
+            return jsonify({'success': False, 'error': 'Combined file not found'}), 404
+        
+        file_size = os.path.getsize(combined_path)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        logger.info(f"🚀 Processing chunked file: {filename} ({file_size_mb:.1f} MB)")
+        
+        # Process with DeepFilterNet2
+        with open(combined_path, 'rb') as file_stream:
+            enhanced_audio, method_used = enhance_with_deepfilter(file_stream, filename)
+        
+        # Clean up upload directory
+        import shutil
+        shutil.rmtree(upload_dir, ignore_errors=True)
+        
+        if not enhanced_audio:
+            # Fallback to original
+            with open(combined_path, 'rb') as f:
+                enhanced_audio = f.read()
+            method_used = "Original Audio (DeepFilterNet2 failed)"
+        
+        # Return enhanced audio
+        output_filename = f'{os.path.splitext(filename)[0]}_enhanced_voiceclean.wav'
+        
+        return send_file(
+            io.BytesIO(enhanced_audio),
+            as_attachment=True,
+            download_name=output_filename,
+            mimetype='audio/wav'
+        )
+        
+    except Exception as e:
+        logger.error(f"Chunked enhancement error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -143,14 +256,20 @@ def enhance_audio():
             logger.info(f"📁 File: {file.filename}")
             logger.info(f"📊 Size: {file_size:,} bytes ({file_size_mb:.1f} MB)")
             
-            # Size validation - OPTIMIZED for DeepFilterNet2
+            # Size validation - Now supports large files via chunking
             if file_size == 0:
                 return jsonify({'success': False, 'error': 'Empty file uploaded'}), 400
             
-            if file_size > 100 * 1024 * 1024:  # 100MB limit for DeepFilterNet2
+            # For direct upload, still limited by Vercel's 4.5MB
+            # Large files should use chunked upload endpoint
+            if file_size > 4.5 * 1024 * 1024:  # 4.5MB Vercel limit for direct upload
                 return jsonify({
                     'success': False, 
-                    'error': f'File too large ({file_size_mb:.1f}MB). Maximum allowed: 100MB for DeepFilterNet2'
+                    'error': f'File too large for direct upload ({file_size_mb:.1f}MB).',
+                    'suggestion': 'Use chunked upload for files larger than 4.5MB.',
+                    'use_chunked_upload': True,
+                    'current_size': f'{file_size_mb:.1f}MB',
+                    'max_direct_size': '4.5MB'
                 }), 413
             
             if file_size < 1000:  # Minimum 1KB
@@ -211,43 +330,42 @@ def enhance_audio():
 
 @app.route('/api/health')
 def health_check():
-    """Health check optimized for DeepFilterNet2"""
+    """Health check with chunked upload support"""
     return jsonify({
         'status': 'healthy',
-        'version': '17.0 - DeepFilterNet2 OPTIMIZED',
+        'version': '19.0 - Large File Support via Chunked Upload',
         'primary_service': 'DeepFilterNet2 (drewThomasson/DeepFilterNet2_no_limit)',
         'fallback_services': ['Original Audio'],
         'enhancement_guaranteed': True,
         'supported_formats': sorted(list(ALLOWED_EXTENSIONS)),
-        'max_file_size': '100MB',
-        'max_duration': '15 minutes',
-        'streaming_enabled': True,
+        'max_file_size': 'Unlimited (chunked upload)',
+        'direct_upload_limit': '4.5MB',
         'chunked_upload': True,
-        'retry_logic': True,
+        'large_file_support': True,
+        'max_duration': '15 minutes',
         'free_service': True,
         'professional_quality': True,
-        'optimized_for_large_files': True,
         'ui_style': 'ElevenLabs inspired minimal design',
         'ready': True
     })
 
 @app.route('/api/test')
 def test_endpoint():
-    """Test endpoint optimized for DeepFilterNet2"""
+    """Test endpoint with chunked upload support"""
     return jsonify({
-        'message': 'VoiceClean AI v17.0 - DeepFilterNet2 OPTIMIZED for Large Files!',
+        'message': 'VoiceClean AI v19.0 - Large Files Supported via Chunked Upload!',
         'timestamp': time.time(),
         'status': 'operational',
-        'enhancement': 'deepfilternet2_optimized',
-        'max_file_size': '100MB',
+        'enhancement': 'deepfilternet2_chunked_upload',
+        'max_file_size': 'Unlimited',
+        'direct_upload_limit': '4.5MB',
+        'chunked_upload': True,
+        'large_file_support': True,
         'max_duration': '15_minutes',
-        'streaming_enabled': True,
-        'chunked_processing': True,
-        'retry_logic': True,
         'free_service': True,
-        'processing_type': 'huggingface_gradio_optimized',
+        'processing_type': 'huggingface_gradio_chunked',
         'model': 'drewThomasson/DeepFilterNet2_no_limit',
-        'optimizations': ['chunked_upload', 'retry_connection', 'extended_timeout', 'proper_cleanup']
+        'features': ['chunked_upload', 'large_file_support', 'unlimited_size']
     })
 
 @app.errorhandler(404)
@@ -258,9 +376,10 @@ def not_found(error):
 def file_too_large(error):
     return jsonify({
         'success': False,
-        'error': 'File too large. Maximum size is 100MB for DeepFilterNet2 processing.',
-        'max_size': '100MB',
-        'suggestion': 'DeepFilterNet2 can handle large files up to 100MB. If your file is larger, please compress it.'
+        'error': 'File too large. Vercel serverless functions have a 4.5MB request body limit.',
+        'max_size': '4.5MB',
+        'vercel_limitation': True,
+        'suggestion': 'Please compress your audio file to under 4.5MB or use a different hosting platform for larger files.'
     }), 413
 
 @app.errorhandler(500)

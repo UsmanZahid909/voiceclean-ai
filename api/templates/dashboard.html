@@ -138,7 +138,7 @@
                         
                         <!-- File Info -->
                         <div class="mt-6 text-sm text-gray-500">
-                            Supported: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS • Max: 55MB
+                            Supported: MP3, WAV, M4A, FLAC, OGG, AAC, WEBM, OPUS • Large files supported via chunked upload
                         </div>
                     </div>
                 </div>
@@ -261,6 +261,7 @@
         class VoiceCleanStudio {
             constructor() {
                 this.audioFile = null;
+                this.largeAudioFile = null;
                 this.enhancedAudioUrl = null;
                 this.init();
             }
@@ -325,19 +326,112 @@
                     return;
                 }
 
-                if (file.size > 55 * 1024 * 1024) {
-                    this.showError('File too large', `File size is ${(file.size/1024/1024).toFixed(1)}MB. Maximum allowed is 55MB.`);
+                // Check if file needs chunked upload (larger than 4.5MB)
+                if (file.size > 4.5 * 1024 * 1024) {
+                    this.processLargeFile(file);
                     return;
                 }
 
+                // Process small files normally
                 this.audioFile = file;
                 this.updateUploadArea(file);
                 document.getElementById('optionsSection').style.display = 'block';
                 document.getElementById('processBtn').disabled = false;
             }
 
-            updateUploadArea(file) {
+            async processLargeFile(file) {
+                this.updateUploadArea(file, true); // Show as large file
+                document.getElementById('optionsSection').style.display = 'block';
+                document.getElementById('processBtn').disabled = false;
+                
+                // Store for chunked processing
+                this.largeAudioFile = file;
+                this.audioFile = null; // Clear normal file
+            }
+
+            async uploadInChunks(file) {
+                const chunkSize = 4 * 1024 * 1024; // 4MB chunks
+                const totalChunks = Math.ceil(file.size / chunkSize);
+                const uploadId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                this.showProgress();
+                
+                try {
+                    for (let i = 0; i < totalChunks; i++) {
+                        const start = i * chunkSize;
+                        const end = Math.min(start + chunkSize, file.size);
+                        const chunk = file.slice(start, end);
+                        
+                        const formData = new FormData();
+                        formData.append('chunk', chunk);
+                        formData.append('chunkIndex', i.toString());
+                        formData.append('totalChunks', totalChunks.toString());
+                        formData.append('filename', file.name);
+                        formData.append('uploadId', uploadId);
+                        
+                        const response = await fetch('/api/upload-chunk', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Chunk upload failed: ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+                        
+                        // Update progress
+                        const progress = ((i + 1) / totalChunks) * 50; // 50% for upload
+                        document.getElementById('progressBar').style.width = `${progress}%`;
+                        document.getElementById('progressText').textContent = `Uploading: ${Math.round(progress)}%`;
+                        
+                        if (result.ready_for_processing) {
+                            // All chunks uploaded, now process
+                            return await this.processChunkedFile(uploadId, file.name);
+                        }
+                    }
+                } catch (error) {
+                    this.hideProgress();
+                    this.showError('Upload Failed', error.message);
+                    throw error;
+                }
+            }
+
+            async processChunkedFile(uploadId, filename) {
+                try {
+                    document.getElementById('progressText').textContent = 'Processing with DeepFilterNet2...';
+                    
+                    const response = await fetch('/api/enhance-chunked', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            uploadId: uploadId,
+                            filename: filename
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Processing failed: ${response.status}`);
+                    }
+                    
+                    const blob = await response.blob();
+                    this.enhancedAudioUrl = URL.createObjectURL(blob);
+                    this.showResult();
+                    
+                } catch (error) {
+                    this.hideProgress();
+                    this.showError('Processing Failed', error.message);
+                    throw error;
+                }
+            }
+
+            updateUploadArea(file, isLargeFile = false) {
                 const uploadContent = document.getElementById('uploadContent');
+                const sizeText = this.formatFileSize(file.size);
+                const processingNote = isLargeFile ? '<p class="text-blue-400 text-sm mt-2">🚀 Large file detected - will use chunked processing</p>' : '';
+                
                 uploadContent.innerHTML = `
                     <div class="w-20 h-20 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
                         <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -345,7 +439,8 @@
                         </svg>
                     </div>
                     <h3 class="text-2xl font-semibold mb-2">${file.name}</h3>
-                    <p class="text-gray-400 mb-4">Size: ${this.formatFileSize(file.size)}</p>
+                    <p class="text-gray-400 mb-4">Size: ${sizeText}</p>
+                    ${processingNote}
                     <button type="button" class="glass-effect px-6 py-2 rounded-lg font-medium hover:bg-white hover:bg-opacity-10 transition-all" onclick="voiceCleanStudio.resetInterface()">
                         Choose Different File
                     </button>
@@ -353,6 +448,17 @@
             }
 
             async processAudio() {
+                // Check if it's a large file that needs chunked processing
+                if (this.largeAudioFile) {
+                    try {
+                        await this.uploadInChunks(this.largeAudioFile);
+                    } catch (error) {
+                        console.error('Large file processing error:', error);
+                    }
+                    return;
+                }
+
+                // Process normal small files
                 if (!this.audioFile) return;
 
                 const enhancementType = document.querySelector('input[name="enhancementType"]:checked')?.value || 'isolation';
@@ -476,6 +582,7 @@
                 document.getElementById('processBtn').disabled = true;
                 
                 this.audioFile = null;
+                this.largeAudioFile = null;
                 if (this.enhancedAudioUrl) {
                     URL.revokeObjectURL(this.enhancedAudioUrl);
                     this.enhancedAudioUrl = null;
