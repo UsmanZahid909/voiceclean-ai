@@ -18,16 +18,24 @@ app.config['MAX_CONTENT_LENGTH'] = None
 app.config['UPLOAD_FOLDER'] = '/tmp'
 app.secret_key = os.getenv('SECRET_KEY', 'voiceclean-ai-secret-key-2024')
 
-# Firebase Configuration - Auto-generated and working
+# Firebase Configuration - Using Environment Variables
 FIREBASE_CONFIG = {
-    "apiKey": "AIzaSyF29QM3C0pri4z5say9nu4a",
-    "authDomain": "voiceclean-ai-say9nu4a.firebaseapp.com",
-    "projectId": "voiceclean-ai-say9nu4a",
-    "storageBucket": "voiceclean-ai-say9nu4a.appspot.com",
-    "messagingSenderId": "454829723768",
-    "appId": "1:454829723768:web:ec36f24d8df4f882499d8d",
-    "measurementId": "G-G35LS3E4P7"
+    "apiKey": os.getenv('FIREBASE_API_KEY', 'AIzaSyF29QM3C0pri4z5say9nu4a'),
+    "authDomain": os.getenv('FIREBASE_AUTH_DOMAIN', 'voiceclean-ai-say9nu4a.firebaseapp.com'),
+    "projectId": os.getenv('FIREBASE_PROJECT_ID', 'voiceclean-ai-say9nu4a'),
+    "storageBucket": os.getenv('FIREBASE_STORAGE_BUCKET', 'voiceclean-ai-say9nu4a.appspot.com'),
+    "messagingSenderId": os.getenv('FIREBASE_MESSAGING_SENDER_ID', '454829723768'),
+    "appId": os.getenv('FIREBASE_APP_ID', '1:454829723768:web:ec36f24d8df4f882499d8d'),
+    "measurementId": os.getenv('FIREBASE_MEASUREMENT_ID', 'G-G35LS3E4P7'),
+    "databaseURL": os.getenv('FIREBASE_DATABASE_URL', 'https://voiceclean-ai-say9nu4a-default-rtdb.firebaseio.com/')
 }
+
+# Additional Firebase Configuration
+FIREBASE_ENABLED = os.getenv('FIREBASE_ENABLED', 'true').lower() == 'true'
+FIREBASE_ENV = os.getenv('FIREBASE_ENV', 'production')
+APP_NAME = os.getenv('APP_NAME', 'VoiceClean AI')
+APP_URL = os.getenv('APP_URL', 'https://voiceclean-ai.vercel.app')
+APP_ENV = os.getenv('APP_ENV', 'production')
 
 # Subscription Plans
 PLANS = {
@@ -87,8 +95,11 @@ def enhance_with_deepfilter(file_stream, filename="audio.wav"):
 # Main Routes
 @app.route('/')
 def index():
-    logger.info("🏠 Main page accessed")
-    return render_template('index.html', firebase_config=FIREBASE_CONFIG)
+    logger.info("🏠 Main page accessed - LOGIN/SIGNUP BUTTONS SHOULD BE VISIBLE")
+    # Force template refresh by adding cache busting
+    return render_template('index.html', 
+                         firebase_config=FIREBASE_CONFIG,
+                         cache_bust=datetime.now().timestamp())
 
 @app.route('/login')
 def login():
@@ -134,13 +145,19 @@ def debug_info():
     return jsonify({
         'status': 'debug',
         'environment': 'vercel' if os.getenv('VERCEL') else 'local',
+        'app_env': APP_ENV,
+        'firebase_enabled': FIREBASE_ENABLED,
+        'firebase_env': FIREBASE_ENV,
+        'app_name': APP_NAME,
+        'app_url': APP_URL,
         'routes': [
-            '/', '/login', '/signup', '/pricing', '/dashboard'
+            '/', '/login', '/signup', '/pricing', '/dashboard', '/test'
         ],
         'templates_available': [
-            'index.html', 'login.html', 'signup.html', 'pricing.html', 'dashboard.html'
+            'index.html', 'login.html', 'signup.html', 'pricing.html', 'dashboard.html', 'test.html'
         ],
         'firebase_config_loaded': bool(FIREBASE_CONFIG),
+        'firebase_project_id': FIREBASE_CONFIG.get('projectId'),
         'timestamp': datetime.now().isoformat()
     })
 
