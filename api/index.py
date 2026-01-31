@@ -229,4 +229,5 @@ def enhance_audio():
         return jsonify({'success': False, 'error': f'Processing error: {str(e)}'}), 500
 
 if __name__ == '__main__':
+    print("🚀 VoiceClean AI Starting - Login/Signup buttons should be visible!")
     app.run(debug=True)
